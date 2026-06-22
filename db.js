@@ -674,9 +674,8 @@ const dbHelpers = {
   deductStockFromBatches: (itemId, qtyToDeduct) => {
     return new Promise((resolve, reject) => {
       // FEFO Batch stock deduction helper
-      dbHelpers.getInventoryBatches(itemId).then((batches) => {
+      dbHelpers.getInventoryBatches(itemId).then(async (batches) => {
         let remaining = qtyToDeduct;
-        let updatePromises = [];
         
         for (const batch of batches) {
           if (remaining <= 0) break;
@@ -685,18 +684,23 @@ const dbHelpers = {
           const toDeduct = Math.min(batch.qty, remaining);
           remaining -= toDeduct;
 
-          const promise = new Promise((resUpdate, rejUpdate) => {
-            sqliteDb.run("UPDATE inventory_batches SET qty = qty - ? WHERE id = ?", [toDeduct, batch.id], (err) => {
-              if (err) rejUpdate(err);
-              else resUpdate();
+          if (dbType === 'supabase') {
+            const newQty = batch.qty - toDeduct;
+            const { error: updateErr } = await supabase
+              .from('inventory_batches')
+              .update({ qty: newQty })
+              .eq('id', batch.id);
+            if (updateErr) return reject(updateErr);
+          } else {
+            await new Promise((resUpdate, rejUpdate) => {
+              sqliteDb.run("UPDATE inventory_batches SET qty = qty - ? WHERE id = ?", [toDeduct, batch.id], (err) => {
+                if (err) rejUpdate(err);
+                else resUpdate();
+              });
             });
-          });
-          updatePromises.push(promise);
+          }
         }
-
-        Promise.all(updatePromises)
-          .then(() => resolve())
-          .catch(reject);
+        resolve();
       }).catch(reject);
     });
   },
@@ -708,7 +712,18 @@ const dbHelpers = {
         supabase.from('billing').select('*').order('billing_date', { ascending: false })
           .then(({ data, error }) => {
             if (error) reject(error);
-            else resolve(data);
+            else {
+              const parsed = (data || []).map(r => {
+                let items = r.items;
+                try {
+                  items = typeof items === 'string' ? JSON.parse(items) : (items || []);
+                } catch (e) {
+                  items = [];
+                }
+                return { ...r, items };
+              });
+              resolve(parsed);
+            }
           });
       } else {
         sqliteDb.all("SELECT * FROM billing ORDER BY billing_date DESC", [], (err, rows) => {
@@ -727,15 +742,39 @@ const dbHelpers = {
 
   createBilling: (bill) => {
     return new Promise((resolve, reject) => {
+      const { id, patient_id, visit_id, items, total_amount, payment_status, payment_method, billing_date, insurance_provider, insurance_amount, copay_amount, payment_method_split, status } = bill;
+      const itemsStr = typeof items === 'string' ? items : JSON.stringify(items);
+      
       if (dbType === 'supabase') {
-        supabase.from('billing').insert([bill]).select().single()
+        const insertData = {
+          id,
+          patient_id,
+          visit_id,
+          items: itemsStr,
+          total_amount,
+          payment_status,
+          payment_method,
+          billing_date,
+          insurance_provider: insurance_provider || null,
+          insurance_amount: insurance_amount || 0.0,
+          copay_amount: copay_amount || 0.0,
+          payment_method_split: payment_method_split || null,
+          status: status || 'paid'
+        };
+
+        supabase.from('billing').insert([insertData]).select().single()
           .then(({ data, error }) => {
             if (error) reject(error);
-            else resolve(data);
+            else {
+              try {
+                data.items = typeof data.items === 'string' ? JSON.parse(data.items) : (data.items || []);
+              } catch (e) {
+                data.items = [];
+              }
+              resolve(data);
+            }
           });
       } else {
-        const { id, patient_id, visit_id, items, total_amount, payment_status, payment_method, billing_date, insurance_provider, insurance_amount, copay_amount, payment_method_split, status } = bill;
-        const itemsStr = JSON.stringify(items);
         sqliteDb.run(
           "INSERT INTO billing (id, patient_id, visit_id, items, total_amount, payment_status, payment_method, billing_date, insurance_provider, insurance_amount, copay_amount, payment_method_split, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           [id, patient_id, visit_id, itemsStr, total_amount, payment_status, payment_method, billing_date, insurance_provider || null, insurance_amount || 0.0, copay_amount || 0.0, payment_method_split || null, status || 'paid'],
@@ -750,71 +789,129 @@ const dbHelpers = {
 
   voidBilling: (id) => {
     return new Promise((resolve, reject) => {
-      // Find billing record
-      sqliteDb.get("SELECT * FROM billing WHERE id = ?", [id], (err, bill) => {
-        if (err) return reject(err);
-        if (!bill) return reject(new Error('Invoice not found'));
-        if (bill.status === 'voided') return reject(new Error('Invoice is already voided'));
+      if (dbType === 'supabase') {
+        supabase.from('billing').select('*').eq('id', id).single()
+          .then(({ data: bill, error: findErr }) => {
+            if (findErr || !bill) return reject(findErr || new Error('Invoice not found'));
+            if (bill.status === 'voided') return reject(new Error('Invoice is already voided'));
 
-        // Parse items
-        const items = JSON.parse(bill.items || '[]');
+            let items = [];
+            try {
+              items = typeof bill.items === 'string' ? JSON.parse(bill.items) : (bill.items || []);
+            } catch (e) {
+              items = [];
+            }
 
-        // Set status to voided
-        sqliteDb.run("UPDATE billing SET status = 'voided' WHERE id = ?", [id], async (err) => {
-          if (err) return reject(err);
+            supabase.from('billing').update({ status: 'voided' }).eq('id', id)
+              .then(async ({ error: updateErr }) => {
+                if (updateErr) return reject(updateErr);
 
-          // Restore stock values
-          for (const item of items) {
-            if (item.id && item.id.startsWith('inv_')) {
-              try {
-                // Restore main stock level
-                await dbHelpers.updateInventoryStock(item.id, parseInt(item.qty));
-                
-                // Add qty back to the oldest batch
-                sqliteDb.get("SELECT id FROM inventory_batches WHERE item_id = ? ORDER BY expiry_date ASC LIMIT 1", [item.id], (err, batch) => {
-                  if (!err && batch) {
-                    sqliteDb.run("UPDATE inventory_batches SET qty = qty + ? WHERE id = ?", [parseInt(item.qty), batch.id]);
+                for (const item of items) {
+                  if (item.id && item.id.startsWith('inv_')) {
+                    try {
+                      await dbHelpers.updateInventoryStock(item.id, parseInt(item.qty));
+                      
+                      const { data: batches, error: batchErr } = await supabase
+                        .from('inventory_batches')
+                        .select('*')
+                        .eq('item_id', item.id)
+                        .order('expiry_date', { ascending: true })
+                        .limit(1);
+                        
+                      if (!batchErr && batches && batches.length > 0) {
+                        const batch = batches[0];
+                        const newBatchQty = (batch.qty || 0) + parseInt(item.qty);
+                        await supabase
+                          .from('inventory_batches')
+                          .update({ qty: newBatchQty })
+                          .eq('id', batch.id);
+                      }
+                    } catch (stockErr) {
+                      console.warn(`Could not restore stock for item ${item.id}:`, stockErr.message);
+                    }
                   }
-                });
-              } catch (stockErr) {
-                console.warn(`Could not restore stock for item ${item.id}:`, stockErr.message);
+                }
+                resolve({ id, status: 'voided' });
+              });
+          });
+      } else {
+        sqliteDb.get("SELECT * FROM billing WHERE id = ?", [id], (err, bill) => {
+          if (err) return reject(err);
+          if (!bill) return reject(new Error('Invoice not found'));
+          if (bill.status === 'voided') return reject(new Error('Invoice is already voided'));
+
+          const items = JSON.parse(bill.items || '[]');
+
+          sqliteDb.run("UPDATE billing SET status = 'voided' WHERE id = ?", [id], async (err) => {
+            if (err) return reject(err);
+
+            for (const item of items) {
+              if (item.id && item.id.startsWith('inv_')) {
+                try {
+                  await dbHelpers.updateInventoryStock(item.id, parseInt(item.qty));
+                  
+                  sqliteDb.get("SELECT id FROM inventory_batches WHERE item_id = ? ORDER BY expiry_date ASC LIMIT 1", [item.id], (err, batch) => {
+                    if (!err && batch) {
+                      sqliteDb.run("UPDATE inventory_batches SET qty = qty + ? WHERE id = ?", [parseInt(item.qty), batch.id]);
+                    }
+                  });
+                } catch (stockErr) {
+                  console.warn(`Could not restore stock for item ${item.id}:`, stockErr.message);
+                }
               }
             }
-          }
-          resolve({ id, status: 'voided' });
+            resolve({ id, status: 'voided' });
+          });
         });
-      });
+      }
     });
   },
 
   // Communications Log
   getCommunicationsLog: (patientId = null) => {
     return new Promise((resolve, reject) => {
-      let query = "SELECT * FROM communications_log";
-      let params = [];
-      if (patientId) {
-        query += " WHERE patient_id = ?";
-        params.push(patientId);
+      if (dbType === 'supabase') {
+        let query = supabase.from('communications_log').select('*').order('sent_date', { ascending: false });
+        if (patientId) query = query.eq('patient_id', patientId);
+        query.then(({ data, error }) => {
+          if (error) reject(error);
+          else resolve(data || []);
+        });
+      } else {
+        let query = "SELECT * FROM communications_log";
+        let params = [];
+        if (patientId) {
+          query += " WHERE patient_id = ?";
+          params.push(patientId);
+        }
+        query += " ORDER BY sent_date DESC";
+        sqliteDb.all(query, params, (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
       }
-      query += " ORDER BY sent_date DESC";
-      sqliteDb.all(query, params, (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-      });
     });
   },
 
   createCommunicationLog: (log) => {
     return new Promise((resolve, reject) => {
-      const { id, patient_id, phone, type, message, status, sent_date } = log;
-      sqliteDb.run(
-        "INSERT INTO communications_log (id, patient_id, phone, type, message, status, sent_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [id, patient_id, phone, type, message, status, sent_date],
-        function(err) {
-          if (err) reject(err);
-          else resolve(log);
-        }
-      );
+      if (dbType === 'supabase') {
+        supabase.from('communications_log').insert([log]).select().single()
+          .then(({ data, error }) => {
+            if (error) reject(error);
+            else resolve(data);
+          });
+      } else {
+        const { id, patient_id, phone, type, message, status, sent_date } = log;
+        sqliteDb.run(
+          "INSERT INTO communications_log (id, patient_id, phone, type, message, status, sent_date) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [id, patient_id, phone, type, message, status, sent_date],
+          function(err) {
+            if (err) reject(err);
+            else resolve(log);
+          }
+        );
+      }
     });
   },
 
