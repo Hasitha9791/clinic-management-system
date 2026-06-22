@@ -5,6 +5,13 @@ try {
   console.warn('Warning: sqlite3 module failed to load. Local SQLite fallback will be unavailable:', err.message);
 }
 
+let ws = null;
+try {
+  ws = require('ws');
+} catch (err) {
+  // ws is not installed or failed to load
+}
+
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 const fs = require('fs');
@@ -24,7 +31,11 @@ function hashPassword(password) {
 }
 
 if (supabaseUrl && supabaseKey) {
-  supabase = createClient(supabaseUrl, supabaseKey);
+  const options = {};
+  if (ws) {
+    options.realtime = { transport: ws };
+  }
+  supabase = createClient(supabaseUrl, supabaseKey, options);
   dbType = 'supabase';
   console.log('Connected to Supabase database.');
 } else {
