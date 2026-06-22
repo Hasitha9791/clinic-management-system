@@ -259,8 +259,15 @@ const dbHelpers = {
       if (dbType === 'supabase') {
         supabase.from('users').select('*').eq('username', username).single()
           .then(({ data, error }) => {
-            if (error) resolve(null);
-            else resolve(data);
+            if (error || !data) resolve(null);
+            else {
+              try {
+                data.allowed_tabs = typeof data.allowed_tabs === 'string' ? JSON.parse(data.allowed_tabs) : (data.allowed_tabs || []);
+              } catch (e) {
+                data.allowed_tabs = [];
+              }
+              resolve(data);
+            }
           });
       } else {
         sqliteDb.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
@@ -284,7 +291,18 @@ const dbHelpers = {
         supabase.from('users').select('username, role, allowed_tabs').order('username', { ascending: true })
           .then(({ data, error }) => {
             if (error) reject(error);
-            else resolve(data);
+            else {
+              const parsed = (data || []).map(u => {
+                let tabs = u.allowed_tabs;
+                try {
+                  tabs = typeof tabs === 'string' ? JSON.parse(tabs) : (tabs || []);
+                } catch (e) {
+                  tabs = [];
+                }
+                return { ...u, allowed_tabs: tabs };
+              });
+              resolve(parsed);
+            }
           });
       } else {
         sqliteDb.all("SELECT username, role, allowed_tabs FROM users ORDER BY username ASC", [], (err, rows) => {
@@ -309,7 +327,14 @@ const dbHelpers = {
         supabase.from('users').insert([{ username, password, role, allowed_tabs: allowedTabsStr }]).select().single()
           .then(({ data, error }) => {
             if (error) reject(error);
-            else resolve(data);
+            else {
+              try {
+                data.allowed_tabs = typeof data.allowed_tabs === 'string' ? JSON.parse(data.allowed_tabs) : (data.allowed_tabs || []);
+              } catch (e) {
+                data.allowed_tabs = [];
+              }
+              resolve(data);
+            }
           });
       } else {
         sqliteDb.run(

@@ -250,7 +250,7 @@ export default function Users() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', maxWidth: '250px' }}>
-                        {u.allowed_tabs.map(tabId => {
+                        {(Array.isArray(u.allowed_tabs) ? u.allowed_tabs : []).map(tabId => {
                           const matchingTab = SYSTEM_TABS.find(t => t.id === tabId);
                           return (
                             <span 
