@@ -535,7 +535,7 @@ app.delete('/api/users/:username', async (req, res) => {
 });
 
 // Catch-all route to serve the React index.html for any frontend routes
-app.get('*', (req, res) => {
+app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
 });
 
