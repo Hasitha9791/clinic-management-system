@@ -1,4 +1,10 @@
-const sqlite3 = require('sqlite3').verbose();
+let sqlite3 = null;
+try {
+  sqlite3 = require('sqlite3').verbose();
+} catch (err) {
+  console.warn('Warning: sqlite3 module failed to load. Local SQLite fallback will be unavailable:', err.message);
+}
+
 const { createClient } = require('@supabase/supabase-js');
 const path = require('path');
 const fs = require('fs');
@@ -22,6 +28,10 @@ if (supabaseUrl && supabaseKey) {
   dbType = 'supabase';
   console.log('Connected to Supabase database.');
 } else {
+  if (!sqlite3) {
+    console.error('CRITICAL ERROR: No Supabase credentials found, and sqlite3 module is unavailable.');
+    process.exit(1);
+  }
   console.log('No Supabase credentials found. Falling back to local SQLite database.');
   const dbPath = path.join(__dirname, 'clinic.db');
   sqliteDb = new sqlite3.Database(dbPath, (err) => {
