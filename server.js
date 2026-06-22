@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const db = require('./db');
 
 const app = express();
@@ -7,6 +8,9 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the React frontend build folder
+app.use(express.static(path.join(__dirname, 'frontend/dist')));
 
 // Helper function to generate unique IDs
 function generateId(prefix) {
@@ -528,6 +532,11 @@ app.delete('/api/users/:username', async (req, res) => {
     console.error('Error deleting user:', error);
     res.status(500).json({ error: 'Failed to delete user' });
   }
+});
+
+// Catch-all route to serve the React index.html for any frontend routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
 });
 
 // Start Server

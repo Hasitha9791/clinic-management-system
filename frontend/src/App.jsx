@@ -8,7 +8,7 @@ import Appointments from './components/Appointments';
 import Communications from './components/Communications';
 import Users from './components/Users';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
 export default function App() {
   const [user, setUser] = useState(() => {
