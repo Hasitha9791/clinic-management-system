@@ -1,0 +1,9 @@
+node_modules/
+.env
+clinic.db
+*.log
+setup_db.js
+setup_pooler_db.js
+test_supabase.js
+test_passwords.js
+test_patient_add.js

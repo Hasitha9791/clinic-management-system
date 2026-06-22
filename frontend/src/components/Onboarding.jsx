@@ -1,0 +1,259 @@
+import React, { useState, useEffect } from 'react';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+export default function Onboarding({ onPatientSelect }) {
+  const [patients, setPatients] = useState([]);
+  const [search, setSearch] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    age: '',
+    gender: 'Male',
+    contact: '',
+    address: '',
+    medical_history: ''
+  });
+  const [message, setMessage] = useState({ type: '', text: '' });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetchPatients();
+  }, []);
+
+  const fetchPatients = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/patients`);
+      if (res.ok) {
+        const data = await res.json();
+        setPatients(data);
+      }
+    } catch (err) {
+      console.error('Error fetching patients:', err);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.name) {
+      setMessage({ type: 'danger', text: 'Patient name is required.' });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const res = await fetch(`${API_URL}/api/patients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      });
+
+      if (res.ok) {
+        const newPatient = await res.json();
+        setMessage({ type: 'success', text: `Patient ${newPatient.name} onboarded successfully with ID: ${newPatient.id}` });
+        setFormData({
+          name: '',
+          age: '',
+          gender: 'Male',
+          contact: '',
+          address: '',
+          medical_history: ''
+        });
+        fetchPatients();
+      } else {
+        const errData = await res.json();
+        setMessage({ type: 'danger', text: errData.error || 'Failed to onboard patient.' });
+      }
+    } catch (err) {
+      console.error('Error onboarding patient:', err);
+      setMessage({ type: 'danger', text: 'Server error. Please check if backend is running.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredPatients = patients.filter((patient) => {
+    const term = search.toLowerCase();
+    return (
+      patient.name.toLowerCase().includes(term) ||
+      (patient.contact && patient.contact.toLowerCase().includes(term)) ||
+      patient.id.toLowerCase().includes(term)
+    );
+  });
+
+  const handlePrint = () => {
+    document.body.classList.add('print-only-patient-report');
+    window.print();
+    document.body.classList.remove('print-only-patient-report');
+  };
+
+  return (
+    <div className="grid-sidebar-layout">
+      {/* Onboarding Form */}
+      <div className="card">
+        <h3 className="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+          Register New Patient
+        </h3>
+
+        {message.text && (
+          <div className={`badge badge-${message.type}`} style={{ width: '100%', padding: '0.75rem', marginBottom: '1.25rem', borderRadius: 'var(--radius-sm)' }}>
+            {message.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Full Name *</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              placeholder="e.g. John Doe"
+              className="form-input"
+              required
+            />
+          </div>
+
+          <div className="grid-2">
+            <div className="form-group">
+              <label className="form-label">Age</label>
+              <input
+                type="number"
+                name="age"
+                value={formData.age}
+                onChange={handleInputChange}
+                placeholder="e.g. 35"
+                className="form-input"
+                min="0"
+                max="120"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Gender</label>
+              <select
+                name="gender"
+                value={formData.gender}
+                onChange={handleInputChange}
+                className="form-select"
+              >
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Contact Number</label>
+            <input
+              type="text"
+              name="contact"
+              value={formData.contact}
+              onChange={handleInputChange}
+              placeholder="e.g. +94 77 123 4567"
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Address</label>
+            <input
+              type="text"
+              name="address"
+              value={formData.address}
+              onChange={handleInputChange}
+              placeholder="e.g. 123 Main St, Colombo"
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Medical History / Allergies</label>
+            <textarea
+              name="medical_history"
+              value={formData.medical_history}
+              onChange={handleInputChange}
+              placeholder="e.g. Penicillin allergy, Hypertension history..."
+              className="form-textarea"
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
+            {loading ? 'Registering...' : 'Register Patient'}
+          </button>
+        </form>
+      </div>
+
+      {/* Patient Database View */}
+      <div className="card patient-report-card">
+        <h3 className="card-title">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          Patient Directory
+        </h3>
+
+        <div className="filter-bar">
+          <input
+            type="text"
+            placeholder="Search by name or telephone number..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="form-input search-input"
+          />
+          <button onClick={handlePrint} className="btn btn-secondary">
+            🖨️ Print Directory
+          </button>
+        </div>
+
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Age/Gender</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPatients.length > 0 ? (
+                filteredPatients.map((patient) => (
+                  <tr key={patient.id}>
+                    <td>
+                      <span className="badge badge-primary">{patient.id}</span>
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{patient.name}</td>
+                    <td>{patient.age ? `${patient.age} yrs` : 'N/A'} / {patient.gender}</td>
+                    <td>
+                      <button
+                        onClick={() => onPatientSelect(patient)}
+                        className="btn btn-secondary"
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                      >
+                        Select
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No patients found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
