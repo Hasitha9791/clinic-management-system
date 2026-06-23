@@ -223,7 +223,21 @@ export default function App() {
         {/* Left branding welcome side */}
         <div className="login-hero-side">
           <div className="login-hero-content">
-            <h1 className="login-hero-title">Ayu Health Suite</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+              <img 
+                src="/logo.jpeg" 
+                alt="Ayu Health Suite Logo" 
+                style={{ 
+                  width: '60px', 
+                  height: '60px', 
+                  borderRadius: '50%', 
+                  objectFit: 'cover', 
+                  border: '2px solid rgba(255, 255, 255, 0.25)', 
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)' 
+                }} 
+              />
+              <h1 className="login-hero-title" style={{ margin: 0 }}>Ayu Health Suite</h1>
+            </div>
             <p className="login-hero-tagline">
               Empowering healthcare providers with real-time electronic medical records (EMR), 
               intelligent inventory control, queue token routing, and secure billing operations.
@@ -264,11 +278,11 @@ export default function App() {
 
         {/* Right interactive login form side */}
         <div className="login-form-side">
-          <div className="card" style={{ maxWidth: '420px', width: '100%', padding: '2.5rem', border: 'none' }}>
-            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-              <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '145px', height: '145px', borderRadius: '50%', objectFit: 'cover', border: '4px solid var(--primary-light)', boxShadow: 'var(--shadow-md)', marginBottom: '1rem' }} />
-              <h2 style={{ fontSize: '1.95rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.25rem', letterSpacing: '0.2px' }}>Ayu Health Suite</h2>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 500, marginTop: '0.25rem' }}>Integrated Clinical Operations & Healthcare Portal</p>
+          <div className="card" style={{ maxWidth: '420px', width: '100%', padding: '2rem', border: 'none' }}>
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '110px', height: '110px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--primary-light)', boxShadow: 'var(--shadow-md)', marginBottom: '0.75rem' }} />
+              <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.15rem', letterSpacing: '0.2px' }}>Ayu Health Suite</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 500, marginTop: '0.15rem' }}>Integrated Clinical Operations & Healthcare Portal</p>
             </div>
 
             {loginError && (
