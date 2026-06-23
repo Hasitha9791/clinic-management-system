@@ -22,17 +22,23 @@ function generateId(prefix) {
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
+const isProduction = process.env.NODE_ENV === 'production' || process.env.PORT === '7860';
+const puppeteerExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || null;
+
 const wwebClient = new Client({
   authStrategy: new LocalAuth({
     dataPath: path.join(__dirname, '.wwebjs_auth')
   }),
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   puppeteer: {
-    headless: false,
+    headless: isProduction ? true : false,
+    executablePath: puppeteerExecutablePath || undefined,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled'
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
     ]
   }
 });
