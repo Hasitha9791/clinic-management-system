@@ -18,6 +18,71 @@ function generateId(prefix) {
   return `${prefix}-${num}`;
 }
 
+// Twilio Initialization
+let twilioClient = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  try {
+    twilioClient = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+    console.log('Twilio Messaging Service Initialized.');
+  } catch (err) {
+    console.warn('Warning: twilio module failed to initialize:', err.message);
+  }
+} else {
+  console.log('Twilio credentials not found. Notification calls will be simulated.');
+}
+
+// Helper to send real Twilio SMS or WhatsApp messages
+async function sendTwilioMessage(toPhone, type, bodyContent) {
+  if (!toPhone) {
+    console.warn('[TWILIO] No recipient number provided. Simulating send.');
+    return { status: 'simulated', sid: null };
+  }
+
+  // Format to E.164 format (e.g. +94771234567)
+  let formattedTo = toPhone.trim().replace(/[-\s()]/g, '');
+  if (!formattedTo.startsWith('+')) {
+    if (formattedTo.startsWith('0')) {
+      formattedTo = '+94' + formattedTo.substring(1);
+    } else {
+      formattedTo = '+94' + formattedTo;
+    }
+  }
+
+  if (!twilioClient) {
+    console.log(`[SIMULATED ${type.toUpperCase()} TO ${formattedTo}]: "${bodyContent}"`);
+    return { status: 'simulated', sid: `sim_${Math.random().toString(36).substr(2, 9)}` };
+  }
+
+  try {
+    if (type === 'WhatsApp') {
+      const fromWhatsApp = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886';
+      const msg = await twilioClient.messages.create({
+        body: bodyContent,
+        from: fromWhatsApp,
+        to: `whatsapp:${formattedTo}`
+      });
+      console.log(`[TWILIO WHATSAPP SENT] SID: ${msg.sid} to ${formattedTo}`);
+      return { status: 'sent', sid: msg.sid };
+    } else {
+      const fromSMS = process.env.TWILIO_PHONE_NUMBER;
+      if (!fromSMS) {
+        throw new Error('TWILIO_PHONE_NUMBER env variable is missing for SMS.');
+      }
+      const msg = await twilioClient.messages.create({
+        body: bodyContent,
+        from: fromSMS,
+        to: formattedTo
+      });
+      console.log(`[TWILIO SMS SENT] SID: ${msg.sid} to ${formattedTo}`);
+      return { status: 'sent', sid: msg.sid };
+    }
+  } catch (err) {
+    console.error(`[TWILIO ERROR] Failed to send ${type} to ${formattedTo}:`, err.message);
+    throw err;
+  }
+}
+
+
 // Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', database: db.dbType });
@@ -184,26 +249,34 @@ app.post('/api/appointments', async (req, res) => {
 
     const savedAppt = await db.createAppointment(newAppt);
 
-    // Trigger simulated booking alert SMS
+    // Trigger booking alert SMS
     try {
       const patient = await db.getPatientById(patient_id);
       const contactPhone = patient ? patient.contact : '';
       if (contactPhone) {
         const commMsg = `Dear ${patient.name}, your appointment with ${newAppt.doctor_name} is scheduled on ${appointment_date} (${time_slot}). Your Queue Token is #${savedAppt.token_number}.`;
+        
+        let sendStatus = 'Delivered';
+        try {
+          const twilioResult = await sendTwilioMessage(contactPhone, 'SMS', commMsg);
+          if (twilioResult.status === 'simulated') sendStatus = 'Delivered';
+        } catch (twilioErr) {
+          sendStatus = 'Failed';
+        }
+
         const newComm = {
           id: generateId('COM'),
           patient_id,
           phone: contactPhone,
           type: 'SMS',
           message: commMsg,
-          status: 'Delivered',
+          status: sendStatus,
           sent_date: new Date().toISOString().replace('T', ' ').substr(0, 19)
         };
         await db.createCommunicationLog(newComm);
-        console.log(`[SIMULATED SMS SENT TO ${contactPhone}]: "${commMsg}"`);
       }
     } catch (e) {
-      console.warn("Booking simulated alert failed:", e.message);
+      console.warn("Booking alert failed:", e.message);
     }
 
     res.status(201).json(savedAppt);
@@ -230,20 +303,28 @@ app.put('/api/appointments/:id/status', async (req, res) => {
         const contactPhone = patient ? patient.contact : '';
         if (contactPhone) {
           const commMsg = `Dear ${patient.name}, you have checked in successfully. Your current token queue number is #${updatedAppt.token_number}. Please wait for your turn.`;
+          
+          let sendStatus = 'Sent';
+          try {
+            const twilioResult = await sendTwilioMessage(contactPhone, 'WhatsApp', commMsg);
+            if (twilioResult.status === 'simulated') sendStatus = 'Sent';
+          } catch (twilioErr) {
+            sendStatus = 'Failed';
+          }
+
           const newComm = {
             id: generateId('COM'),
             patient_id: updatedAppt.patient_id,
             phone: contactPhone,
             type: 'WhatsApp',
             message: commMsg,
-            status: 'Sent',
+            status: sendStatus,
             sent_date: new Date().toISOString().replace('T', ' ').substr(0, 19)
           };
           await db.createCommunicationLog(newComm);
-          console.log(`[SIMULATED WHATSAPP SENT TO ${contactPhone}]: "${commMsg}"`);
         }
       } catch (e) {
-        console.warn("Queue checkin simulated alert failed:", e.message);
+        console.warn("Queue checkin alert failed:", e.message);
       }
     }
 
@@ -481,26 +562,34 @@ app.post('/api/billing', async (req, res) => {
       }
     }
 
-    // Trigger simulated invoice billing notification
+    // Trigger Twilio invoice billing notification
     try {
       const patient = await db.getPatientById(patient_id);
       const contactPhone = patient ? patient.contact : '';
       if (contactPhone) {
         const commMsg = `Dear ${patient.name}, invoice ${newBill.id} for Rs. ${newBill.total_amount.toFixed(2)} has been generated. Payment Status: ${newBill.payment_status.toUpperCase()}. Thank you!`;
+        
+        let sendStatus = 'Delivered';
+        try {
+          const twilioResult = await sendTwilioMessage(contactPhone, 'SMS', commMsg);
+          if (twilioResult.status === 'simulated') sendStatus = 'Delivered';
+        } catch (twilioErr) {
+          sendStatus = 'Failed';
+        }
+
         const newComm = {
           id: generateId('COM'),
           patient_id,
           phone: contactPhone,
           type: 'SMS',
           message: commMsg,
-          status: 'Delivered',
+          status: sendStatus,
           sent_date: new Date().toISOString().replace('T', ' ').substr(0, 19)
         };
         await db.createCommunicationLog(newComm);
-        console.log(`[SIMULATED SMS SENT TO ${contactPhone}]: "${commMsg}"`);
       }
     } catch (commErr) {
-      console.warn("Simulated communication log failed:", commErr.message);
+      console.warn("Communication log failed:", commErr.message);
     }
 
     res.status(201).json(savedBill);
