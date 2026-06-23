@@ -16,6 +16,7 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
   
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
+  const [checkInPrompt, setCheckInPrompt] = useState({ show: false, patient: null });
 
   useEffect(() => {
     fetchPatients();
@@ -166,12 +167,12 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
       if (res.ok) {
         fetchAppointments();
         
-        // If status is checked-in and user wants to consult, route to consultations page
+        // If status is checked-in and user wants to consult, prompt them
         if (status === 'Checked-in' && onGoToConsultation) {
           const updated = await res.json();
           const p = patients.find(pat => pat.id === updated.patient_id);
-          if (p && window.confirm(`Patient ${p.name} has checked in. Go to consultations view now?`)) {
-            onGoToConsultation(p);
+          if (p) {
+            setCheckInPrompt({ show: true, patient: p });
           }
         }
       } else {
@@ -417,6 +418,36 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
           </table>
         </div>
       </div>
+      {checkInPrompt.show && checkInPrompt.patient && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '420px', padding: '2rem', textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🩺</div>
+            <h3 style={{ marginBottom: '0.75rem', color: 'var(--dark)', fontSize: '1.25rem' }}>Patient Checked-In</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              Patient <strong>{checkInPrompt.patient.name}</strong> has checked in. Go to consultations view now?
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button
+                onClick={() => {
+                  onGoToConsultation(checkInPrompt.patient);
+                  setCheckInPrompt({ show: false, patient: null });
+                }}
+                className="btn btn-primary"
+                style={{ padding: '0.5rem 1.25rem', fontSize: '0.9rem' }}
+              >
+                Yes, Go to Consults
+              </button>
+              <button
+                onClick={() => setCheckInPrompt({ show: false, patient: null })}
+                className="btn btn-secondary"
+                style={{ padding: '0.5rem 1.25rem', fontSize: '0.9rem' }}
+              >
+                No, Stay Here
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
