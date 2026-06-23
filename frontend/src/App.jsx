@@ -25,12 +25,39 @@ export default function App() {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  
+  // Floating Toast Notifications State
+  const [toasts, setToasts] = useState([]);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const handleToastEvent = (e) => {
+      const { message, type } = e.detail;
+      const id = Date.now() + Math.random();
+      setToasts(prev => [...prev, { id, message, type }]);
+      
+      setTimeout(() => {
+        setToasts(prev => prev.filter(t => t.id !== id));
+      }, 4000);
+    };
+
+    window.addEventListener('show-toast', handleToastEvent);
+    
+    // Bind to window global object
+    window.showToast = (message, type = 'success') => {
+      window.dispatchEvent(new CustomEvent('show-toast', { detail: { message, type } }));
+    };
+
+    return () => {
+      window.removeEventListener('show-toast', handleToastEvent);
+      delete window.showToast;
+    };
   }, []);
 
   const formatDateTime = (date) => {
@@ -82,13 +109,22 @@ export default function App() {
         const data = await res.json();
         setUser(data);
         localStorage.setItem('clinic_user', JSON.stringify(data));
+        if (window.showToast) {
+          window.showToast(`Welcome back, ${data.username.toUpperCase()}!`, 'success');
+        }
       } else {
         const err = await res.json();
         setLoginError(err.error || 'Invalid credentials.');
+        if (window.showToast) {
+          window.showToast(err.error || 'Invalid credentials.', 'danger');
+        }
       }
     } catch (err) {
       console.error('Login error:', err);
       setLoginError('Server error. Please verify the backend is running.');
+      if (window.showToast) {
+        window.showToast('Server error during login.', 'danger');
+      }
     } finally {
       setLoginLoading(false);
     }
@@ -99,6 +135,9 @@ export default function App() {
     localStorage.removeItem('clinic_user');
     setSelectedPatient(null);
     setSelectedVisit(null);
+    if (window.showToast) {
+      window.showToast('Signed out successfully.', 'info');
+    }
   };
 
   const handlePatientSelect = (patient) => {
@@ -456,6 +495,24 @@ export default function App() {
           <Users />
         )}
       </main>
+
+      {/* Floating Toast Notification Feed */}
+      <div className="toast-container">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`toast-item ${toast.type}`}>
+            <span style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center' }}>
+              {toast.type === 'success' && '✅'}
+              {toast.type === 'danger' && '❌'}
+              {toast.type === 'warning' && '⚠️'}
+              {toast.type === 'info' && 'ℹ️'}
+            </span>
+            <div style={{ flex: 1, paddingRight: '0.5rem' }}>{toast.message}</div>
+            <button className="toast-close" onClick={() => setToasts(prev => prev.filter(t => t.id !== toast.id))}>
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

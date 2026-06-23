@@ -89,7 +89,9 @@ export default function Inventory() {
       });
 
       if (res.ok) {
-        setMessage({ type: 'success', text: 'Inventory item added successfully!' });
+        const successMsg = 'Inventory item added successfully!';
+        setMessage({ type: 'success', text: successMsg });
+        if (window.showToast) window.showToast(successMsg, 'success');
         setFormData({
           name: '',
           type: 'drug',
@@ -103,11 +105,15 @@ export default function Inventory() {
         fetchInventory();
       } else {
         const errData = await res.json();
-        setMessage({ type: 'danger', text: errData.error || 'Failed to add item.' });
+        const errMsg = errData.error || 'Failed to add item.';
+        setMessage({ type: 'danger', text: errMsg });
+        if (window.showToast) window.showToast(errMsg, 'danger');
       }
     } catch (err) {
       console.error('Error adding item:', err);
-      setMessage({ type: 'danger', text: 'Server error. Please check connection.' });
+      const errMsg = 'Server error. Please check connection.';
+      setMessage({ type: 'danger', text: errMsg });
+      if (window.showToast) window.showToast(errMsg, 'danger');
     } finally {
       setLoading(false);
     }
@@ -116,7 +122,7 @@ export default function Inventory() {
   const handleStockUpdateSubmit = async (id) => {
     const changeVal = parseInt(stockEdit.change);
     if (isNaN(changeVal) || changeVal === 0) {
-      alert('Please enter a valid non-zero number.');
+      if (window.showToast) window.showToast('Please enter a valid non-zero number.', 'warning');
       return;
     }
 
@@ -130,11 +136,13 @@ export default function Inventory() {
       if (res.ok) {
         setStockEdit({ id: null, change: '' });
         fetchInventory();
+        if (window.showToast) window.showToast('Stock quantity updated successfully.', 'success');
       } else {
-        alert('Failed to update stock.');
+        if (window.showToast) window.showToast('Failed to update stock.', 'danger');
       }
     } catch (err) {
       console.error('Error updating stock:', err);
+      if (window.showToast) window.showToast('Error updating stock.', 'danger');
     }
   };
 
@@ -142,7 +150,7 @@ export default function Inventory() {
   const handleAddBatchSubmit = async (itemId) => {
     const { batch_number, qty, expiry_date, cost_price } = batchFormData;
     if (!batch_number || !qty || !expiry_date) {
-      alert('Batch number, Quantity, and Expiry Date are required.');
+      if (window.showToast) window.showToast('Batch number, Quantity, and Expiry Date are required.', 'warning');
       return;
     }
 
@@ -168,13 +176,14 @@ export default function Inventory() {
         });
         fetchItemBatches(itemId);
         fetchInventory(); // Refresh overall item stock counts
-        alert('Stock batch added successfully!');
+        if (window.showToast) window.showToast('Stock batch added successfully!', 'success');
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to add batch.');
+        if (window.showToast) window.showToast(err.error || 'Failed to add batch.', 'danger');
       }
     } catch (err) {
       console.error('Error adding batch:', err);
+      if (window.showToast) window.showToast('Error adding batch. Please check connection.', 'danger');
     }
   };
 

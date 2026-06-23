@@ -104,9 +104,10 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
           }
         }
       } else {
-        alert('Failed to update status.');
+        if (window.showToast) window.showToast('Failed to update status.', 'danger');
       }
     } catch (err) {
+      if (window.showToast) window.showToast('Error updating status.', 'danger');
       console.error('Error updating status:', err);
     }
   };

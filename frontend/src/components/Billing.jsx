@@ -127,7 +127,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
       // Check stock
       if (matchedItem.qty <= 0) {
-        alert(`Warning: ${matchedItem.name} is out of stock!`);
+        if (window.showToast) window.showToast(`Warning: ${matchedItem.name} is out of stock!`, 'danger');
       }
 
       // Add to cart or increment
@@ -183,7 +183,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   const handleAddItemToCart = () => {
     if (currentItem.id === 'custom') {
       if (!currentItem.customName || !currentItem.customPrice) {
-        alert('Please fill name and price for custom service');
+        if (window.showToast) window.showToast('Please fill name and price for custom service.', 'warning');
         return;
       }
       const newItem = {
@@ -203,7 +203,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
     const invItem = inventory.find(i => i.id === currentItem.id);
     if (!invItem) {
-      alert('Please select an item from stock.');
+      if (window.showToast) window.showToast('Please select an item from stock.', 'warning');
       return;
     }
 
@@ -258,11 +258,11 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
   const handleGenerateInvoice = async () => {
     if (!selectedPatient) {
-      alert('Please select a patient first.');
+      if (window.showToast) window.showToast('Please select a patient first.', 'warning');
       return;
     }
     if (cart.length === 0) {
-      alert('Cart is empty.');
+      if (window.showToast) window.showToast('Cart is empty.', 'warning');
       return;
     }
 
@@ -274,7 +274,9 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
       const cash = parseFloat(splitCashAmount) || 0;
       const card = parseFloat(splitCardAmount) || 0;
       if (Math.abs((cash + card) - copay) > 0.01) {
-        alert(`Split payment details are incorrect. Cash + Card must equal patient copay: Rs. ${copay.toFixed(2)} (Current sum: Rs. ${(cash + card).toFixed(2)})`);
+        if (window.showToast) {
+          window.showToast(`Split payment details are incorrect. Cash + Card must equal patient copay: Rs. ${copay.toFixed(2)} (Current sum: Rs. ${(cash + card).toFixed(2)})`, 'danger');
+        }
         return;
       }
     }
@@ -311,16 +313,17 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
         ]);
         fetchInventory(); // Refresh stock levels after deductions
         fetchBillingHistory(); // Refresh billing audit logs
+        if (window.showToast) window.showToast('Invoice generated successfully!', 'success');
         setTimeout(() => {
           if (barcodeInputRef.current) barcodeInputRef.current.focus();
         }, 300);
       } else {
         const errData = await res.json();
-        alert(errData.error || 'Failed to generate invoice.');
+        if (window.showToast) window.showToast(errData.error || 'Failed to generate invoice.', 'danger');
       }
     } catch (err) {
       console.error('Error generating invoice:', err);
-      alert('Server error generating bill. Please check backend connection.');
+      if (window.showToast) window.showToast('Server error generating bill. Please check backend connection.', 'danger');
     } finally {
       setLoading(false);
     }
@@ -347,15 +350,16 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
         method: 'PUT'
       });
       if (res.ok) {
-        alert('Invoice successfully voided. Quantities returned to inventory.');
+        if (window.showToast) window.showToast('Invoice successfully voided. Quantities returned to inventory.', 'success');
         fetchBillingHistory();
         fetchInventory();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to void invoice.');
+        if (window.showToast) window.showToast(err.error || 'Failed to void invoice.', 'danger');
       }
     } catch (err) {
       console.error('Error voiding invoice:', err);
+      if (window.showToast) window.showToast('Error voiding invoice. Please try again.', 'danger');
     }
   };
 
@@ -508,7 +512,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                   if (barcodeInput) {
                     handleBarcodeScanSubmit();
                   } else {
-                    alert('Please select a stock item from simulation dropdown first.');
+                    if (window.showToast) window.showToast('Please select a stock item from simulation dropdown first.', 'warning');
                   }
                 }} 
                 className="btn btn-secondary" 

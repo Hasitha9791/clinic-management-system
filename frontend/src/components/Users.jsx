@@ -93,7 +93,9 @@ export default function Users() {
       });
 
       if (res.ok) {
-        setMessage({ type: 'success', text: `System user "${formData.username}" created successfully!` });
+        const successMsg = `System user "${formData.username}" created successfully!`;
+        setMessage({ type: 'success', text: successMsg });
+        if (window.showToast) window.showToast(successMsg, 'success');
         setFormData({
           username: '',
           password: '',
@@ -103,11 +105,15 @@ export default function Users() {
         fetchUsers();
       } else {
         const err = await res.json();
-        setMessage({ type: 'danger', text: err.error || 'Failed to create user.' });
+        const errMsg = err.error || 'Failed to create user.';
+        setMessage({ type: 'danger', text: errMsg });
+        if (window.showToast) window.showToast(errMsg, 'danger');
       }
     } catch (err) {
       console.error('Error adding user:', err);
-      setMessage({ type: 'danger', text: 'Server error creating user.' });
+      const errMsg = 'Server error creating user.';
+      setMessage({ type: 'danger', text: errMsg });
+      if (window.showToast) window.showToast(errMsg, 'danger');
     } finally {
       setLoading(false);
     }
@@ -115,7 +121,7 @@ export default function Users() {
 
   const handleDeleteUser = async (username) => {
     if (username === 'admin') {
-      alert('Cannot delete master admin user.');
+      if (window.showToast) window.showToast('Cannot delete master admin user.', 'danger');
       return;
     }
     if (!window.confirm(`Are you sure you want to delete user "${username}"? They will lose all access immediately.`)) {
@@ -128,14 +134,15 @@ export default function Users() {
       });
 
       if (res.ok) {
-        alert(`User ${username} deleted.`);
+        if (window.showToast) window.showToast(`User "${username}" deleted successfully.`, 'success');
         fetchUsers();
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to delete user.');
+        if (window.showToast) window.showToast(err.error || 'Failed to delete user.', 'danger');
       }
     } catch (err) {
       console.error('Error deleting user:', err);
+      if (window.showToast) window.showToast('Error deleting user. Please try again.', 'danger');
     }
   };
 

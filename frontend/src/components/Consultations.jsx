@@ -61,7 +61,9 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!selectedPatient) {
-      setMessage({ type: 'danger', text: 'Please select a patient first.' });
+      const errMsg = 'Please select a patient first.';
+      setMessage({ type: 'danger', text: errMsg });
+      if (window.showToast) window.showToast(errMsg, 'warning');
       return;
     }
 
@@ -80,7 +82,9 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
 
       if (res.ok) {
         const savedVisit = await res.json();
-        setMessage({ type: 'success', text: 'Consultation recorded successfully!' });
+        const successMsg = 'Consultation recorded successfully!';
+        setMessage({ type: 'success', text: successMsg });
+        if (window.showToast) window.showToast(successMsg, 'success');
         setFormData({
           symptoms: '',
           diagnosis: '',
@@ -100,11 +104,15 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
         }
       } else {
         const errData = await res.json();
-        setMessage({ type: 'danger', text: errData.error || 'Failed to save visit details.' });
+        const errMsg = errData.error || 'Failed to save visit details.';
+        setMessage({ type: 'danger', text: errMsg });
+        if (window.showToast) window.showToast(errMsg, 'danger');
       }
     } catch (err) {
       console.error('Error recording visit:', err);
-      setMessage({ type: 'danger', text: 'Server error. Please check backend connection.' });
+      const errMsg = 'Server error. Please check backend connection.';
+      setMessage({ type: 'danger', text: errMsg });
+      if (window.showToast) window.showToast(errMsg, 'danger');
     } finally {
       setLoading(false);
     }

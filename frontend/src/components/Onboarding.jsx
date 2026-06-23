@@ -40,7 +40,9 @@ export default function Onboarding({ onPatientSelect }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.name) {
-      setMessage({ type: 'danger', text: 'Patient name is required.' });
+      const errMsg = 'Patient name is required.';
+      setMessage({ type: 'danger', text: errMsg });
+      if (window.showToast) window.showToast(errMsg, 'warning');
       return;
     }
 
@@ -56,7 +58,9 @@ export default function Onboarding({ onPatientSelect }) {
 
       if (res.ok) {
         const newPatient = await res.json();
-        setMessage({ type: 'success', text: `Patient ${newPatient.name} onboarded successfully with ID: ${newPatient.id}` });
+        const successMsg = `Patient "${newPatient.name}" onboarded successfully!`;
+        setMessage({ type: 'success', text: successMsg });
+        if (window.showToast) window.showToast(successMsg, 'success');
         setFormData({
           name: '',
           age: '',
@@ -68,11 +72,15 @@ export default function Onboarding({ onPatientSelect }) {
         fetchPatients();
       } else {
         const errData = await res.json();
-        setMessage({ type: 'danger', text: errData.error || 'Failed to onboard patient.' });
+        const errMsg = errData.error || 'Failed to onboard patient.';
+        setMessage({ type: 'danger', text: errMsg });
+        if (window.showToast) window.showToast(errMsg, 'danger');
       }
     } catch (err) {
       console.error('Error onboarding patient:', err);
-      setMessage({ type: 'danger', text: 'Server error. Please check if backend is running.' });
+      const errMsg = 'Server error. Please check if backend is running.';
+      setMessage({ type: 'danger', text: errMsg });
+      if (window.showToast) window.showToast(errMsg, 'danger');
     } finally {
       setLoading(false);
     }
