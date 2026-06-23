@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 
 const app = express();
@@ -45,7 +46,13 @@ const wwebClient = new Client({
 
 const QRCode = require('qrcode');
 
+let isWwebReady = false;
+let qrText = null;
+
 wwebClient.on('qr', (qr) => {
+  isWwebReady = false;
+  qrText = qr;
+
   console.log('\n--- WHATSAPP SCAN REQUIREMENT ---');
   console.log('Please scan the QR code below using your WhatsApp Linked Devices:');
   qrcode.generate(qr, { small: true });
@@ -53,27 +60,32 @@ wwebClient.on('qr', (qr) => {
 
   // Generate PNG files of the QR code for easier scanning
   const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
+  const qrRootPath = path.join(__dirname, 'qr.png');
   const qrArtifactPath = 'C:/Users/Hasitha/.gemini/antigravity/brain/6e726681-e8f5-47c4-ba11-6ceaf568492f/qr.png';
 
   QRCode.toFile(qrPublicPath, qr, { margin: 2, scale: 8 }, (err) => {
-    if (err) {
-      console.error('Error generating public/qr.png:', err.message);
-    } else {
-      console.log('QR Code PNG saved successfully to frontend/public/qr.png');
-    }
+    if (err) console.error('Error generating public/qr.png:', err.message);
+  });
+
+  QRCode.toFile(qrRootPath, qr, { margin: 2, scale: 8 }, (err) => {
+    if (err) console.error('Error generating qr.png:', err.message);
   });
 
   QRCode.toFile(qrArtifactPath, qr, { margin: 2, scale: 8 }, (err) => {
-    if (err) {
-      console.error('Error generating artifact/qr.png:', err.message);
-    } else {
-      console.log('QR Code PNG saved successfully to artifact/qr.png');
-    }
+    if (err) console.error('Error generating artifact/qr.png:', err.message);
   });
 });
 
 wwebClient.on('ready', () => {
+  isWwebReady = true;
+  qrText = null;
   console.log('WhatsApp Web Client is fully connected and ready!');
+
+  // Clean up physical QR images when connected
+  const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
+  const qrRootPath = path.join(__dirname, 'qr.png');
+  try { if (fs.existsSync(qrPublicPath)) fs.unlinkSync(qrPublicPath); } catch (e) {}
+  try { if (fs.existsSync(qrRootPath)) fs.unlinkSync(qrRootPath); } catch (e) {}
 });
 
 wwebClient.on('auth_failure', (msg) => {
@@ -81,6 +93,8 @@ wwebClient.on('auth_failure', (msg) => {
 });
 
 wwebClient.on('disconnected', (reason) => {
+  isWwebReady = false;
+  qrText = null;
   console.warn('WhatsApp Web Client was disconnected:', reason);
   // Attempt to re-initialize
   try {
@@ -96,6 +110,24 @@ try {
 } catch (err) {
   console.error('Error starting WhatsApp Web Client:', err.message);
 }
+
+// WhatsApp Web Status Endpoints
+app.get('/api/whatsapp/status', (req, res) => {
+  res.json({
+    connected: isWwebReady,
+    hasQr: !!qrText
+  });
+});
+
+app.get('/api/whatsapp/qr', (req, res) => {
+  const qrPath = path.join(__dirname, 'qr.png');
+  if (fs.existsSync(qrPath)) {
+    res.setHeader('Content-Type', 'image/png');
+    res.sendFile(qrPath);
+  } else {
+    res.status(404).json({ error: 'QR Code not available. Device might already be connected.' });
+  }
+});
 
 // Helper to send real automated WhatsApp messages
 async function sendWhatsAppMessage(toPhone, bodyContent) {
