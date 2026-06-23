@@ -161,63 +161,105 @@ export default function App() {
   // Login view if user not authenticated
   if (!user) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, var(--dark), hsl(172, 60%, 18%))',
-        padding: '1.5rem'
-      }}>
-        <div className="card" style={{ maxWidth: '420px', width: '100%', padding: '2.5rem', boxShadow: 'var(--shadow-lg)', border: 'none', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ textAlign: 'center', marginBottom: '2.25rem' }}>
-            <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '145px', height: '145px', borderRadius: '50%', objectFit: 'cover', border: '4px solid var(--primary-light)', boxShadow: 'var(--shadow-md)', marginBottom: '0.75rem' }} />
-            <h2 style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.5rem', letterSpacing: '0.2px' }}>Ayu Health Suite</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Clinic & POS Management System Portal</p>
-          </div>
-
-          {loginError && (
-            <div className="badge badge-danger" style={{ width: '100%', padding: '0.75rem', marginBottom: '1.25rem', borderRadius: '4px', textAlign: 'center' }}>
-              {loginError}
-            </div>
-          )}
-
-          <form onSubmit={handleLoginSubmit}>
-            <div className="form-group">
-              <label className="form-label">Username</label>
-              <input
-                type="text"
-                placeholder="e.g. admin or doctor"
-                value={loginForm.username}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value.toLowerCase().trim() }))}
-                className="form-input"
-                required
-              />
-            </div>
-            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                placeholder="e.g. admin123"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
-                className="form-input"
-                required
-              />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.95rem' }} disabled={loginLoading}>
-              {loginLoading ? 'Authenticating...' : 'Sign In'}
-            </button>
-          </form>
-
-          <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '1rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            <strong>Demo Credentials (username / password):</strong>
-            <ul style={{ listStyle: 'none', paddingLeft: 0, marginTop: '0.25rem' }}>
-              <li>🔧 Admin: <code>admin</code> / <code>admin123</code></li>
-              <li>🩺 Doctor: <code>doctor</code> / <code>doctor123</code></li>
-              <li>👤 Receptionist: <code>receptionist</code> / <code>receptionist123</code></li>
-              <li>💳 Cashier: <code>cashier</code> / <code>cashier123</code></li>
+      <div className="login-page-wrapper">
+        {/* Left branding welcome side */}
+        <div className="login-hero-side">
+          <div className="login-hero-content">
+            <h1 className="login-hero-title">Ayu Health Suite</h1>
+            <p className="login-hero-tagline">
+              Empowering healthcare providers with real-time electronic medical records (EMR), 
+              intelligent inventory control, queue token routing, and secure billing operations.
+            </p>
+            
+            <ul className="login-features-list">
+              <li className="login-feature-item">
+                <div className="login-feature-icon">🩺</div>
+                <div className="login-feature-text">
+                  <h3>Clinical Consultations & EMR</h3>
+                  <p>Comprehensive patient charts, vitals history timeline, and digital prescription pathways.</p>
+                </div>
+              </li>
+              <li className="login-feature-item">
+                <div className="login-feature-icon">💳</div>
+                <div className="login-feature-text">
+                  <h3>Integrated POS & Split Billing</h3>
+                  <p>Process invoice copayments, cash-card splits, and insurance claims with instant stock deductions.</p>
+                </div>
+              </li>
+              <li className="login-feature-item">
+                <div className="login-feature-icon">📦</div>
+                <div className="login-feature-text">
+                  <h3>Batch Inventory & Expiry Alerts</h3>
+                  <p>Track medicine batches, buying/cost price analytics, and automated countdown warnings for short-expiry stock.</p>
+                </div>
+              </li>
+              <li className="login-feature-item">
+                <div className="login-feature-icon">📅</div>
+                <div className="login-feature-text">
+                  <h3>Token Queue & Scheduler</h3>
+                  <p>Automate daily patient queue numbers, doctor availability timelines, and WhatsApp check-in token alerts.</p>
+                </div>
+              </li>
             </ul>
+          </div>
+        </div>
+
+        {/* Right interactive login form side */}
+        <div className="login-form-side">
+          <div className="card" style={{ maxWidth: '420px', width: '100%', padding: '2.5rem', border: 'none' }}>
+            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+              <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '145px', height: '145px', borderRadius: '50%', objectFit: 'cover', border: '4px solid var(--primary-light)', boxShadow: 'var(--shadow-md)', marginBottom: '1rem' }} />
+              <h2 style={{ fontSize: '1.95rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.25rem', letterSpacing: '0.2px' }}>Ayu Health Suite</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 500, marginTop: '0.25rem' }}>Integrated Clinical Operations & Healthcare Portal</p>
+            </div>
+
+            {loginError && (
+              <div className="badge badge-danger" style={{ width: '100%', padding: '0.75rem', marginBottom: '1.25rem', borderRadius: '4px', textAlign: 'center' }}>
+                {loginError}
+              </div>
+            )}
+
+            <form onSubmit={handleLoginSubmit}>
+              <div className="form-group">
+                <label className="form-label">Username</label>
+                <input
+                  type="text"
+                  placeholder="e.g. admin or doctor"
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, username: e.target.value.toLowerCase().trim() }))}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Password</label>
+                <input
+                  type="password"
+                  placeholder="e.g. admin123"
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm(prev => ({ ...prev, password: e.target.value }))}
+                  className="form-input"
+                  required
+                />
+              </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.95rem' }} disabled={loginLoading}>
+                {loginLoading ? 'Authenticating...' : 'Sign In'}
+              </button>
+            </form>
+
+            <details style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
+              <summary style={{ cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600 }}>
+                💡 View Demo Credentials
+              </summary>
+              <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)', backgroundColor: 'var(--light)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
+                <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <li>🔧 <strong>Admin:</strong> <code>admin</code> / <code>admin123</code></li>
+                  <li>🩺 <strong>Doctor:</strong> <code>doctor</code> / <code>doctor123</code></li>
+                  <li>👤 <strong>Reception:</strong> <code>receptionist</code> / <code>receptionist123</code></li>
+                  <li>💳 <strong>Cashier:</strong> <code>cashier</code> / <code>cashier123</code></li>
+                </ul>
+              </div>
+            </details>
           </div>
         </div>
       </div>
