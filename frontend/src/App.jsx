@@ -171,9 +171,9 @@ export default function App() {
       }}>
         <div className="card" style={{ maxWidth: '420px', width: '100%', padding: '2.5rem', boxShadow: 'var(--shadow-lg)', border: 'none', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
           <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <span style={{ fontSize: '3rem' }}>🏥</span>
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.5rem' }}>MediCare Portal</h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Clinic & POS Management System</p>
+            <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-light)', marginBottom: '0.5rem' }} />
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.5rem' }}>Ayu Health Suite</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Clinic & POS Management System Portal</p>
           </div>
 
           {loginError && (
@@ -228,9 +228,9 @@ export default function App() {
     <div className="app-container">
       {/* Sidebar for Desktop & Mobile */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="logo-container">
-          <div className="logo-icon">🏥</div>
-          <span className="logo-text">MediCare POS</span>
+        <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
+          <span className="logo-text" style={{ fontSize: '1.05rem', fontWeight: 800, whiteSpace: 'nowrap' }}>Ayu Health Suite</span>
         </div>
 
         <nav style={{ flex: 1 }}>
