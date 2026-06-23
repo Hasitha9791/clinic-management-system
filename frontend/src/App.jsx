@@ -166,13 +166,13 @@ export default function App() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, hsl(220, 40%, 12%), hsl(200, 85%, 25%))',
+        background: 'linear-gradient(135deg, var(--dark), hsl(172, 60%, 18%))',
         padding: '1.5rem'
       }}>
         <div className="card" style={{ maxWidth: '420px', width: '100%', padding: '2.5rem', boxShadow: 'var(--shadow-lg)', border: 'none', background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(10px)' }}>
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--primary-light)', marginBottom: '0.5rem' }} />
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.5rem' }}>Ayu Health Suite</h2>
+          <div style={{ textAlign: 'center', marginBottom: '2.25rem' }}>
+            <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '145px', height: '145px', borderRadius: '50%', objectFit: 'cover', border: '4px solid var(--primary-light)', boxShadow: 'var(--shadow-md)', marginBottom: '0.75rem' }} />
+            <h2 style={{ fontSize: '2.1rem', fontWeight: 800, color: 'var(--dark)', marginTop: '0.5rem', letterSpacing: '0.2px' }}>Ayu Health Suite</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Clinic & POS Management System Portal</p>
           </div>
 
@@ -228,12 +228,12 @@ export default function App() {
     <div className="app-container">
       {/* Sidebar for Desktop & Mobile */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="logo-container" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-          <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
-          <span className="logo-text" style={{ fontSize: '1.05rem', fontWeight: 800, whiteSpace: 'nowrap' }}>Ayu Health Suite</span>
+        <div className="logo-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem', width: '100%', padding: '0.5rem 0' }}>
+          <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '95px', height: '95px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--primary-light)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }} />
+          <span className="logo-text" style={{ fontSize: '1.3rem', fontWeight: 800, textAlign: 'center', letterSpacing: '0.5px' }}>Ayu Health Suite</span>
         </div>
 
-        <nav style={{ flex: 1 }}>
+        <nav style={{ flex: 1, overflowY: 'auto' }}>
           <ul className="nav-links">
             {isTabAllowed('dashboard') && (
               <li className="nav-item">

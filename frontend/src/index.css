@@ -1,13 +1,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --primary: hsl(200, 85%, 42%);
-  --primary-hover: hsl(200, 85%, 35%);
-  --primary-light: hsl(200, 85%, 95%);
-  --secondary: hsl(260, 60%, 55%);
-  --secondary-hover: hsl(260, 60%, 45%);
-  --dark: hsl(220, 40%, 12%);
-  --light: hsl(220, 25%, 97%);
+  --primary: hsl(172, 66%, 36%);         /* Deep Healing Teal */
+  --primary-hover: hsl(172, 66%, 28%);
+  --primary-light: hsl(172, 50%, 95%);
+  --secondary: hsl(145, 45%, 45%);       /* Sage/Herbal Green */
+  --secondary-hover: hsl(145, 45%, 38%);
+  --dark: hsl(180, 30%, 12%);            /* Deep Forest Slate */
+  --light: hsl(160, 15%, 97%);           /* Soft Mint Mist */
   --white: #ffffff;
   
   --success: hsl(145, 65%, 38%);
@@ -17,9 +17,9 @@
   --danger: hsl(0, 75%, 52%);
   --danger-light: hsl(0, 75%, 96%);
   
-  --border: hsl(220, 15%, 88%);
-  --text: hsl(220, 30%, 18%);
-  --text-muted: hsl(220, 12%, 48%);
+  --border: hsl(170, 12%, 88%);
+  --text: hsl(180, 25%, 16%);
+  --text-muted: hsl(180, 12%, 48%);
   
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.08);
@@ -70,6 +70,24 @@ body {
   transition: var(--transition);
 }
 
+.sidebar nav {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 1.5rem;
+  padding-right: 0.25rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.sidebar nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+}
+
 .logo-container {
   display: flex;
   align-items: center;
@@ -92,7 +110,7 @@ body {
 .logo-text {
   font-size: 1.25rem;
   font-weight: 700;
-  background: linear-gradient(to right, #fff, #b3c5ff);
+  background: linear-gradient(to right, #fff, #a8ebd6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -131,9 +149,9 @@ body {
 }
 
 .nav-button.active {
-  background: linear-gradient(135deg, var(--primary), rgba(0, 168, 204, 0.6));
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   color: var(--white);
-  box-shadow: 0 4px 12px rgba(0, 168, 204, 0.3);
+  box-shadow: 0 4px 12px rgba(19, 165, 147, 0.25);
 }
 
 /* Main Content Area */
@@ -256,7 +274,7 @@ body {
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(0, 168, 204, 0.15);
+  box-shadow: 0 0 0 3px rgba(19, 165, 147, 0.15);
 }
 
 .form-textarea {
@@ -280,9 +298,9 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary), hsl(200, 85%, 48%));
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
   color: var(--white);
-  box-shadow: 0 4px 10px rgba(0, 168, 204, 0.2);
+  box-shadow: 0 4px 10px rgba(19, 165, 147, 0.2);
 }
 
 .btn-primary:hover {
