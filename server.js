@@ -534,6 +534,57 @@ app.delete('/api/users/:username', async (req, res) => {
   }
 });
 
+// ==========================================
+// DOCTORS & SPECIALISTS ENDPOINTS
+// ==========================================
+
+// Get all doctors
+app.get('/api/doctors', async (req, res) => {
+  try {
+    const doctors = await db.getDoctors();
+    res.json(doctors);
+  } catch (error) {
+    console.error('Error fetching doctors:', error);
+    res.status(500).json({ error: 'Failed to fetch doctors list' });
+  }
+});
+
+// Create doctor
+app.post('/api/doctors', async (req, res) => {
+  try {
+    const { name, specialty, contact } = req.body;
+    if (!name || !specialty) {
+      return res.status(400).json({ error: 'Doctor name and specialty are required' });
+    }
+
+    const newDoctor = {
+      id: generateId('DOC'),
+      name,
+      specialty,
+      contact: contact || '',
+      status: 'Active'
+    };
+
+    const savedDoctor = await db.createDoctor(newDoctor);
+    res.status(201).json(savedDoctor);
+  } catch (error) {
+    console.error('Error creating doctor:', error);
+    res.status(500).json({ error: 'Failed to add doctor to registry' });
+  }
+});
+
+// Delete doctor
+app.delete('/api/doctors/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    await db.deleteDoctor(id);
+    res.json({ message: `Doctor with ID ${id} deleted successfully` });
+  } catch (error) {
+    console.error('Error deleting doctor:', error);
+    res.status(500).json({ error: 'Failed to delete doctor' });
+  }
+});
+
 // Catch-all route to serve the React index.html for any frontend routes
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));

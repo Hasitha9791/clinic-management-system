@@ -2,9 +2,17 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
+const DEFAULT_DOCTORS = [
+  { id: 'doc_1', name: 'Dr. Hasitha', specialty: 'General Practice' },
+  { id: 'doc_2', name: 'Dr. Fernando', specialty: 'Pediatrics' },
+  { id: 'doc_3', name: 'Dr. Silva', specialty: 'Cardiology' },
+  { id: 'doc_4', name: 'Dr. Perera', specialty: 'Dermatology' }
+];
+
 export default function Appointments({ onSelectPatient, onGoToConsultation }) {
   const [patients, setPatients] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [doctors, setDoctors] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [patientSearch, setPatientSearch] = useState('');
   const [formData, setFormData] = useState({
@@ -19,7 +27,24 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
   useEffect(() => {
     fetchPatients();
     fetchAppointments();
+    fetchDoctors();
   }, [selectedDate]);
+
+  const fetchDoctors = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/doctors`);
+      if (res.ok) {
+        const data = await res.json();
+        setDoctors(data);
+        if (data.length > 0) {
+          const firstDocVal = `${data[0].name} (${data[0].specialty})`;
+          setFormData(prev => ({ ...prev, doctor_name: firstDocVal }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching doctors:', err);
+    }
+  };
 
   const fetchPatients = async () => {
     try {
@@ -187,10 +212,25 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
               onChange={(e) => setFormData(prev => ({ ...prev, doctor_name: e.target.value }))}
               className="form-select"
             >
-              <option value="Dr. Hasitha (General Practice)">Dr. Hasitha (General Practice)</option>
-              <option value="Dr. Fernando (Pediatrics)">Dr. Fernando (Pediatrics)</option>
-              <option value="Dr. Silva (Cardiology)">Dr. Silva (Cardiology)</option>
-              <option value="Dr. Perera (Dermatology)">Dr. Perera (Dermatology)</option>
+              {doctors.length > 0 ? (
+                doctors.map(doc => {
+                  const val = `${doc.name} (${doc.specialty})`;
+                  return (
+                    <option key={doc.id} value={val}>
+                      {val}
+                    </option>
+                  );
+                })
+              ) : (
+                DEFAULT_DOCTORS.map(doc => {
+                  const val = `${doc.name} (${doc.specialty})`;
+                  return (
+                    <option key={doc.id} value={val}>
+                      {val}
+                    </option>
+                  );
+                })
+              )}
             </select>
           </div>
 

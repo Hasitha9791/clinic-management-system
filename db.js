@@ -140,6 +140,34 @@ function initSQLiteSchema() {
       )
     `);
 
+    // Doctors table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS doctors (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        specialty TEXT NOT NULL,
+        contact TEXT,
+        status TEXT DEFAULT 'Active' CHECK(status IN ('Active', 'Inactive'))
+      )
+    `);
+
+    // Seed default doctors if empty
+    sqliteDb.get("SELECT COUNT(*) as count FROM doctors", [], (err, row) => {
+      if (!err && row.count === 0) {
+        const defaultDoctors = [
+          ['doc_1', 'Dr. Hasitha', 'General Practice', '', 'Active'],
+          ['doc_2', 'Dr. Fernando', 'Pediatrics', '', 'Active'],
+          ['doc_3', 'Dr. Silva', 'Cardiology', '', 'Active'],
+          ['doc_4', 'Dr. Perera', 'Dermatology', '', 'Active']
+        ];
+        const stmt = sqliteDb.prepare("INSERT INTO doctors (id, name, specialty, contact, status) VALUES (?, ?, ?, ?, ?)");
+        defaultDoctors.forEach(d => stmt.run(d));
+        stmt.finalize();
+        console.log('Seeded default doctors.');
+      }
+    });
+
+
     // Inventory table
     sqliteDb.run(`
       CREATE TABLE IF NOT EXISTS inventory (
@@ -359,6 +387,63 @@ const dbHelpers = {
           });
       } else {
         sqliteDb.run("DELETE FROM users WHERE username = ?", [username], function(err) {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      }
+    });
+  },
+
+  // Doctors & Consultants
+  getDoctors: () => {
+    return new Promise((resolve, reject) => {
+      if (dbType === 'supabase') {
+        supabase.from('doctors').select('*').order('name', { ascending: true })
+          .then(({ data, error }) => {
+            if (error) reject(error);
+            else resolve(data || []);
+          });
+      } else {
+        sqliteDb.all("SELECT * FROM doctors ORDER BY name ASC", [], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        });
+      }
+    });
+  },
+
+  createDoctor: (doctor) => {
+    return new Promise((resolve, reject) => {
+      const { id, name, specialty, contact, status } = doctor;
+      if (dbType === 'supabase') {
+        supabase.from('doctors').insert([{ id, name, specialty, contact, status }]).select().single()
+          .then(({ data, error }) => {
+            if (error) reject(error);
+            else resolve(data);
+          });
+      } else {
+        sqliteDb.run(
+          "INSERT INTO doctors (id, name, specialty, contact, status) VALUES (?, ?, ?, ?, ?)",
+          [id, name, specialty, contact, status || 'Active'],
+          function(err) {
+            if (err) reject(err);
+            else resolve(doctor);
+          }
+        );
+      }
+    });
+  },
+
+  deleteDoctor: (id) => {
+    return new Promise((resolve, reject) => {
+      if (dbType === 'supabase') {
+        supabase.from('doctors').delete().eq('id', id)
+          .then(({ error }) => {
+            if (error) reject(error);
+            else resolve(true);
+          });
+      } else {
+        sqliteDb.run("DELETE FROM doctors WHERE id = ?", [id], function(err) {
           if (err) reject(err);
           else resolve(true);
         });
