@@ -2,13 +2,6 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
-const DEFAULT_DOCTORS = [
-  { id: 'doc_1', name: 'Dr. Hasitha', specialty: 'General Practice' },
-  { id: 'doc_2', name: 'Dr. Fernando', specialty: 'Pediatrics' },
-  { id: 'doc_3', name: 'Dr. Silva', specialty: 'Cardiology' },
-  { id: 'doc_4', name: 'Dr. Perera', specialty: 'Dermatology' }
-];
-
 export default function Appointments({ onSelectPatient, onGoToConsultation }) {
   const [patients, setPatients] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -17,7 +10,7 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
   const [patientSearch, setPatientSearch] = useState('');
   const [formData, setFormData] = useState({
     patient_id: '',
-    doctor_name: 'Dr. Hasitha (General Practice)',
+    doctor_name: '',
     time_slot: '09:00 AM - 10:00 AM'
   });
   
@@ -222,14 +215,7 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
                   );
                 })
               ) : (
-                DEFAULT_DOCTORS.map(doc => {
-                  const val = `${doc.name} (${doc.specialty})`;
-                  return (
-                    <option key={doc.id} value={val}>
-                      {val}
-                    </option>
-                  );
-                })
+                <option value="">No doctors available (Register in Users & Permissions)</option>
               )}
             </select>
           </div>
