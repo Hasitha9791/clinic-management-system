@@ -569,6 +569,9 @@ app.post('/api/doctors', async (req, res) => {
     res.status(201).json(savedDoctor);
   } catch (error) {
     console.error('Error creating doctor:', error);
+    if (error && error.code === 'PGRST205') {
+      return res.status(400).json({ error: "The 'doctors' table does not exist in your Supabase database. Please create it using the SQL Editor on your Supabase dashboard." });
+    }
     res.status(500).json({ error: 'Failed to add doctor to registry' });
   }
 });
@@ -581,6 +584,9 @@ app.delete('/api/doctors/:id', async (req, res) => {
     res.json({ message: `Doctor with ID ${id} deleted successfully` });
   } catch (error) {
     console.error('Error deleting doctor:', error);
+    if (error && error.code === 'PGRST205') {
+      return res.status(400).json({ error: "The 'doctors' table does not exist in your Supabase database. Please create it using the SQL Editor on your Supabase dashboard." });
+    }
     res.status(500).json({ error: 'Failed to delete doctor' });
   }
 });

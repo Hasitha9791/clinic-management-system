@@ -400,8 +400,21 @@ const dbHelpers = {
       if (dbType === 'supabase') {
         supabase.from('doctors').select('*').order('name', { ascending: true })
           .then(({ data, error }) => {
-            if (error) reject(error);
-            else resolve(data || []);
+            if (error) {
+              if (error.code === 'PGRST205') {
+                console.warn("WARNING: 'doctors' table does not exist in Supabase database. Falling back to default list.");
+                resolve([
+                  { id: 'doc_1', name: 'Dr. Hasitha', specialty: 'General Practice', contact: '', status: 'Active' },
+                  { id: 'doc_2', name: 'Dr. Fernando', specialty: 'Pediatrics', contact: '', status: 'Active' },
+                  { id: 'doc_3', name: 'Dr. Silva', specialty: 'Cardiology', contact: '', status: 'Active' },
+                  { id: 'doc_4', name: 'Dr. Perera', specialty: 'Dermatology', contact: '', status: 'Active' }
+                ]);
+              } else {
+                reject(error);
+              }
+            } else {
+              resolve(data || []);
+            }
           });
       } else {
         sqliteDb.all("SELECT * FROM doctors ORDER BY name ASC", [], (err, rows) => {
