@@ -8,3 +8,5 @@ test_supabase.js
 test_passwords.js
 test_patient_add.js
 clinic_profile_fallback.json
+.wwebjs_auth/
+.wwebjs_cache/

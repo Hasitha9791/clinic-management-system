@@ -18,66 +18,85 @@ function generateId(prefix) {
   return `${prefix}-${num}`;
 }
 
-// Twilio Initialization
-let twilioClient = null;
-if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-  try {
-    twilioClient = require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    console.log('Twilio Messaging Service Initialized.');
-  } catch (err) {
-    console.warn('Warning: twilio module failed to initialize:', err.message);
+// WhatsApp Web Client Initialization
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+
+const wwebClient = new Client({
+  authStrategy: new LocalAuth({
+    dataPath: path.join(__dirname, '.wwebjs_auth')
+  }),
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  puppeteer: {
+    headless: false,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled'
+    ]
   }
-} else {
-  console.log('Twilio credentials not found. Notification calls will be simulated.');
+});
+
+wwebClient.on('qr', (qr) => {
+  console.log('\n--- WHATSAPP SCAN REQUIREMENT ---');
+  console.log('Please scan the QR code below using your WhatsApp Linked Devices:');
+  qrcode.generate(qr, { small: true });
+  console.log('----------------------------------\n');
+});
+
+wwebClient.on('ready', () => {
+  console.log('WhatsApp Web Client is fully connected and ready!');
+});
+
+wwebClient.on('auth_failure', (msg) => {
+  console.error('WhatsApp Web Authentication failure:', msg);
+});
+
+wwebClient.on('disconnected', (reason) => {
+  console.warn('WhatsApp Web Client was disconnected:', reason);
+  // Attempt to re-initialize
+  try {
+    wwebClient.initialize();
+  } catch (err) {
+    console.error('Failed to re-initialize WhatsApp client:', err.message);
+  }
+});
+
+// Start the WhatsApp Client in the background
+try {
+  wwebClient.initialize();
+} catch (err) {
+  console.error('Error starting WhatsApp Web Client:', err.message);
 }
 
-// Helper to send real Twilio SMS or WhatsApp messages
-async function sendTwilioMessage(toPhone, type, bodyContent) {
+// Helper to send real automated WhatsApp messages
+async function sendWhatsAppMessage(toPhone, bodyContent) {
   if (!toPhone) {
-    console.warn('[TWILIO] No recipient number provided. Simulating send.');
+    console.warn('[WHATSAPP] No recipient number provided. Simulating send.');
     return { status: 'simulated', sid: null };
   }
 
-  // Format to E.164 format (e.g. +94771234567)
+  // Format to standard WhatsApp chat ID: country code followed by number (e.g. 94774947440)
   let formattedTo = toPhone.trim().replace(/[-\s()]/g, '');
   if (!formattedTo.startsWith('+')) {
     if (formattedTo.startsWith('0')) {
-      formattedTo = '+94' + formattedTo.substring(1);
+      formattedTo = '94' + formattedTo.substring(1);
     } else {
-      formattedTo = '+94' + formattedTo;
+      formattedTo = '94' + formattedTo;
     }
+  } else {
+    formattedTo = formattedTo.substring(1); // remove '+'
   }
 
-  if (!twilioClient) {
-    console.log(`[SIMULATED ${type.toUpperCase()} TO ${formattedTo}]: "${bodyContent}"`);
-    return { status: 'simulated', sid: `sim_${Math.random().toString(36).substr(2, 9)}` };
-  }
+  const chatId = `${formattedTo}@c.us`;
 
   try {
-    if (type === 'WhatsApp') {
-      const fromWhatsApp = process.env.TWILIO_WHATSAPP_NUMBER || 'whatsapp:+14155238886';
-      const msg = await twilioClient.messages.create({
-        body: bodyContent,
-        from: fromWhatsApp,
-        to: `whatsapp:${formattedTo}`
-      });
-      console.log(`[TWILIO WHATSAPP SENT] SID: ${msg.sid} to ${formattedTo}`);
-      return { status: 'sent', sid: msg.sid };
-    } else {
-      const fromSMS = process.env.TWILIO_PHONE_NUMBER;
-      if (!fromSMS) {
-        throw new Error('TWILIO_PHONE_NUMBER env variable is missing for SMS.');
-      }
-      const msg = await twilioClient.messages.create({
-        body: bodyContent,
-        from: fromSMS,
-        to: formattedTo
-      });
-      console.log(`[TWILIO SMS SENT] SID: ${msg.sid} to ${formattedTo}`);
-      return { status: 'sent', sid: msg.sid };
-    }
+    // Send the message using the wwebClient
+    const msg = await wwebClient.sendMessage(chatId, bodyContent);
+    console.log(`[WHATSAPP WEB SENT] Message sent to ${chatId}. Message ID: ${msg.id.id}`);
+    return { status: 'sent', sid: msg.id.id };
   } catch (err) {
-    console.error(`[TWILIO ERROR] Failed to send ${type} to ${formattedTo}:`, err.message);
+    console.error(`[WHATSAPP WEB ERROR] Failed to send to ${chatId}:`, err.message);
     throw err;
   }
 }
@@ -249,18 +268,18 @@ app.post('/api/appointments', async (req, res) => {
 
     const savedAppt = await db.createAppointment(newAppt);
 
-    // Trigger booking alert SMS
+    // Trigger booking alert WhatsApp
     try {
       const patient = await db.getPatientById(patient_id);
       const contactPhone = patient ? patient.contact : '';
       if (contactPhone) {
         const commMsg = `Dear ${patient.name}, your appointment with ${newAppt.doctor_name} is scheduled on ${appointment_date} (${time_slot}). Your Queue Token is #${savedAppt.token_number}.`;
         
-        let sendStatus = 'Delivered';
+        let sendStatus = 'Sent';
         try {
-          const twilioResult = await sendTwilioMessage(contactPhone, 'SMS', commMsg);
-          if (twilioResult.status === 'simulated') sendStatus = 'Delivered';
-        } catch (twilioErr) {
+          const result = await sendWhatsAppMessage(contactPhone, commMsg);
+          if (result.status === 'simulated') sendStatus = 'Sent';
+        } catch (err) {
           sendStatus = 'Failed';
         }
 
@@ -268,7 +287,7 @@ app.post('/api/appointments', async (req, res) => {
           id: generateId('COM'),
           patient_id,
           phone: contactPhone,
-          type: 'SMS',
+          type: 'WhatsApp',
           message: commMsg,
           status: sendStatus,
           sent_date: new Date().toISOString().replace('T', ' ').substr(0, 19)
@@ -306,9 +325,9 @@ app.put('/api/appointments/:id/status', async (req, res) => {
           
           let sendStatus = 'Sent';
           try {
-            const twilioResult = await sendTwilioMessage(contactPhone, 'WhatsApp', commMsg);
-            if (twilioResult.status === 'simulated') sendStatus = 'Sent';
-          } catch (twilioErr) {
+            const result = await sendWhatsAppMessage(contactPhone, commMsg);
+            if (result.status === 'simulated') sendStatus = 'Sent';
+          } catch (err) {
             sendStatus = 'Failed';
           }
 
@@ -562,18 +581,18 @@ app.post('/api/billing', async (req, res) => {
       }
     }
 
-    // Trigger Twilio invoice billing notification
+    // Trigger WhatsApp invoice billing notification
     try {
       const patient = await db.getPatientById(patient_id);
       const contactPhone = patient ? patient.contact : '';
       if (contactPhone) {
         const commMsg = `Dear ${patient.name}, invoice ${newBill.id} for Rs. ${newBill.total_amount.toFixed(2)} has been generated. Payment Status: ${newBill.payment_status.toUpperCase()}. Thank you!`;
         
-        let sendStatus = 'Delivered';
+        let sendStatus = 'Sent';
         try {
-          const twilioResult = await sendTwilioMessage(contactPhone, 'SMS', commMsg);
-          if (twilioResult.status === 'simulated') sendStatus = 'Delivered';
-        } catch (twilioErr) {
+          const result = await sendWhatsAppMessage(contactPhone, commMsg);
+          if (result.status === 'simulated') sendStatus = 'Sent';
+        } catch (err) {
           sendStatus = 'Failed';
         }
 
@@ -581,7 +600,7 @@ app.post('/api/billing', async (req, res) => {
           id: generateId('COM'),
           patient_id,
           phone: contactPhone,
-          type: 'SMS',
+          type: 'WhatsApp',
           message: commMsg,
           status: sendStatus,
           sent_date: new Date().toISOString().replace('T', ' ').substr(0, 19)
