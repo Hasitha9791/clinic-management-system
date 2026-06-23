@@ -295,9 +295,9 @@ export default function App() {
     <div className="app-container">
       {/* Sidebar for Desktop & Mobile */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
-        <div className="logo-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem', width: '100%', padding: '0.5rem 0' }}>
-          <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '95px', height: '95px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--primary-light)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }} />
-          <span className="logo-text" style={{ fontSize: '1.3rem', fontWeight: 800, textAlign: 'center', letterSpacing: '0.5px' }}>Ayu Health Suite</span>
+        <div className="logo-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem', width: '100%', padding: '0.25rem 0' }}>
+          <img src="/logo.jpeg" alt="Ayu Health Suite Logo" style={{ width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover', border: '3px solid var(--primary-light)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }} />
+          <span className="logo-text" style={{ fontSize: '1.18rem', fontWeight: 800, textAlign: 'center', letterSpacing: '0.5px' }}>Ayu Health Suite</span>
         </div>
 
         <nav style={{ flex: 1, overflowY: 'auto' }}>
