@@ -43,11 +43,33 @@ const wwebClient = new Client({
   }
 });
 
+const QRCode = require('qrcode');
+
 wwebClient.on('qr', (qr) => {
   console.log('\n--- WHATSAPP SCAN REQUIREMENT ---');
   console.log('Please scan the QR code below using your WhatsApp Linked Devices:');
   qrcode.generate(qr, { small: true });
   console.log('----------------------------------\n');
+
+  // Generate PNG files of the QR code for easier scanning
+  const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
+  const qrArtifactPath = 'C:/Users/Hasitha/.gemini/antigravity/brain/6e726681-e8f5-47c4-ba11-6ceaf568492f/qr.png';
+
+  QRCode.toFile(qrPublicPath, qr, { margin: 2, scale: 8 }, (err) => {
+    if (err) {
+      console.error('Error generating public/qr.png:', err.message);
+    } else {
+      console.log('QR Code PNG saved successfully to frontend/public/qr.png');
+    }
+  });
+
+  QRCode.toFile(qrArtifactPath, qr, { margin: 2, scale: 8 }, (err) => {
+    if (err) {
+      console.error('Error generating artifact/qr.png:', err.message);
+    } else {
+      console.log('QR Code PNG saved successfully to artifact/qr.png');
+    }
+  });
 });
 
 wwebClient.on('ready', () => {

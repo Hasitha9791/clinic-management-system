@@ -10,3 +10,4 @@ test_patient_add.js
 clinic_profile_fallback.json
 .wwebjs_auth/
 .wwebjs_cache/
+frontend/public/qr.png
