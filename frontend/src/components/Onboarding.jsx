@@ -95,10 +95,44 @@ export default function Onboarding({ onPatientSelect }) {
     );
   });
 
-  const handlePrint = () => {
-    document.body.classList.add('print-only-patient-report');
-    window.print();
-    document.body.classList.remove('print-only-patient-report');
+  const handleExportExcel = () => {
+    if (patients.length === 0) {
+      if (window.showToast) window.showToast("No patient records found to export.", "warning");
+      return;
+    }
+
+    // Define CSV Headers
+    const headers = ['Patient ID', 'Name', 'Age', 'Gender', 'Contact No', 'Address', 'Medical History/Alerts'];
+    
+    // Format rows (escape quotes, wrap in quotes)
+    const rows = patients.map(p => [
+      p.id,
+      p.name,
+      p.age || '',
+      p.gender || '',
+      p.contact || '',
+      p.address ? p.address.replace(/"/g, '""') : '',
+      p.medical_history ? p.medical_history.replace(/"/g, '""') : ''
+    ]);
+
+    // Build CSV string
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.map(val => `"${val}"`).join(','))
+    ].join('\n');
+
+    // Create dynamic download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Ayu_Health_Suite_Patient_Directory_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (window.showToast) window.showToast("Patient directory exported successfully for Excel.", "success");
   };
 
   return (
@@ -216,8 +250,9 @@ export default function Onboarding({ onPatientSelect }) {
             onChange={(e) => setSearch(e.target.value)}
             className="form-input search-input"
           />
-          <button onClick={handlePrint} className="btn btn-secondary">
-            🖨️ Print Directory
+          <button onClick={handleExportExcel} className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Excel Download
           </button>
         </div>
 
