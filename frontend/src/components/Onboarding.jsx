@@ -95,44 +95,103 @@ export default function Onboarding({ onPatientSelect }) {
     );
   });
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (patients.length === 0) {
       if (window.showToast) window.showToast("No patient records found to export.", "warning");
       return;
     }
 
-    // Define CSV Headers
-    const headers = ['Patient ID', 'Name', 'Age', 'Gender', 'Contact No', 'Address', 'Medical History/Alerts'];
-    
-    // Format rows (escape quotes, wrap in quotes)
-    const rows = patients.map(p => [
-      p.id,
-      p.name,
-      p.age || '',
-      p.gender || '',
-      p.contact || '',
-      p.address ? p.address.replace(/"/g, '""') : '',
-      p.medical_history ? p.medical_history.replace(/"/g, '""') : ''
-    ]);
+    try {
+      // Fetch all visits
+      const visitsRes = await fetch(`${API_URL}/api/visits`);
+      const visits = visitsRes.ok ? await visitsRes.json() : [];
 
-    // Build CSV string
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.map(val => `"${val}"`).join(','))
-    ].join('\n');
+      // Define CSV Headers
+      const headers = [
+        'Patient ID', 
+        'Name', 
+        'Age', 
+        'Gender', 
+        'Contact No', 
+        'Address', 
+        'Medical History/Alerts', 
+        'Visit Date', 
+        'Symptoms', 
+        'Diagnosis', 
+        'Treatment', 
+        'Vitals (BP)', 
+        'Vitals (Pulse)', 
+        'Vitals (Temp)', 
+        'Vitals (Weight)', 
+        'Vitals (SpO2)', 
+        'Doctor Notes'
+      ];
+      
+      const rows = [];
 
-    // Create dynamic download link
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `Ayu_Health_Suite_Patient_Directory_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      patients.forEach(p => {
+        // Find visits for this patient
+        const patientVisits = visits.filter(v => v.patient_id === p.id);
 
-    if (window.showToast) window.showToast("Patient directory exported successfully for Excel.", "success");
+        if (patientVisits.length > 0) {
+          patientVisits.forEach(v => {
+            rows.push([
+              p.id,
+              p.name,
+              p.age || '',
+              p.gender || '',
+              p.contact || '',
+              p.address ? p.address.replace(/"/g, '""') : '',
+              p.medical_history ? p.medical_history.replace(/"/g, '""') : '',
+              v.visit_date ? new Date(v.visit_date).toLocaleDateString() : '',
+              v.symptoms ? v.symptoms.replace(/"/g, '""') : '',
+              v.diagnosis ? v.diagnosis.replace(/"/g, '""') : '',
+              v.treatment ? v.treatment.replace(/"/g, '""') : '',
+              v.bp || '',
+              v.pulse || '',
+              v.temp || '',
+              v.weight || '',
+              v.spo2 || '',
+              v.doctor_notes ? v.doctor_notes.replace(/"/g, '""') : ''
+            ]);
+          });
+        } else {
+          // No visits registered, add row with empty visit details
+          rows.push([
+            p.id,
+            p.name,
+            p.age || '',
+            p.gender || '',
+            p.contact || '',
+            p.address ? p.address.replace(/"/g, '""') : '',
+            p.medical_history ? p.medical_history.replace(/"/g, '""') : '',
+            '', '', '', '', '', '', '', '', '', ''
+          ]);
+        }
+      });
+
+      // Build CSV string
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(val => `"${val}"`).join(','))
+      ].join('\n');
+
+      // Create dynamic download link
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Ayu_Health_Suite_Patient_Clinical_Directory_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      if (window.showToast) window.showToast("Patient clinical directory exported successfully for Excel.", "success");
+    } catch (err) {
+      console.error("Export error:", err);
+      if (window.showToast) window.showToast("Failed to fetch visit records for export.", "danger");
+    }
   };
 
   return (
