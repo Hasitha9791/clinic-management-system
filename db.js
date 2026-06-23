@@ -70,11 +70,20 @@ function initSQLiteSchema() {
     // Run migration check for allowed_tabs column on users
     sqliteDb.run("ALTER TABLE users ADD COLUMN allowed_tabs TEXT", (err) => {});
 
+    // Migration to add clinic-profile to existing admin users
+    sqliteDb.run(`
+      UPDATE users 
+      SET allowed_tabs = '["dashboard","onboarding","appointments","consultations","billing","inventory","communications","users","clinic-profile"]' 
+      WHERE role = 'admin' AND allowed_tabs NOT LIKE '%clinic-profile%'
+    `, (err) => {
+      if (err) console.warn("Failed to run admin permissions migration:", err.message);
+    });
+
     // Seed default users if empty
     sqliteDb.get("SELECT COUNT(*) as count FROM users", [], (err, row) => {
       if (!err && row.count === 0) {
         const defaultUsers = [
-          ['admin', hashPassword('admin123'), 'admin', JSON.stringify(["dashboard", "onboarding", "appointments", "consultations", "billing", "inventory", "communications", "users"])],
+          ['admin', hashPassword('admin123'), 'admin', JSON.stringify(["dashboard", "onboarding", "appointments", "consultations", "billing", "inventory", "communications", "users", "clinic-profile"])],
           ['doctor', hashPassword('doctor123'), 'doctor', JSON.stringify(["dashboard", "onboarding", "consultations", "communications"])],
           ['receptionist', hashPassword('receptionist123'), 'receptionist', JSON.stringify(["dashboard", "onboarding", "appointments", "communications"])],
           ['cashier', hashPassword('cashier123'), 'cashier', JSON.stringify(["dashboard", "billing", "inventory", "communications"])]
@@ -294,6 +303,9 @@ const dbHelpers = {
               } catch (e) {
                 data.allowed_tabs = [];
               }
+              if (data.role === 'admin' && !data.allowed_tabs.includes('clinic-profile')) {
+                data.allowed_tabs.push('clinic-profile');
+              }
               resolve(data);
             }
           });
@@ -301,9 +313,18 @@ const dbHelpers = {
         sqliteDb.get("SELECT * FROM users WHERE username = ?", [username], (err, row) => {
           if (err) reject(err);
           else if (row) {
+            let allowed_tabs = [];
+            try {
+              allowed_tabs = JSON.parse(row.allowed_tabs || '[]');
+            } catch (e) {
+              allowed_tabs = [];
+            }
+            if (row.role === 'admin' && !allowed_tabs.includes('clinic-profile')) {
+              allowed_tabs.push('clinic-profile');
+            }
             resolve({
               ...row,
-              allowed_tabs: JSON.parse(row.allowed_tabs || '[]')
+              allowed_tabs
             });
           } else {
             resolve(null);
@@ -327,6 +348,9 @@ const dbHelpers = {
                 } catch (e) {
                   tabs = [];
                 }
+                if (u.role === 'admin' && !tabs.includes('clinic-profile')) {
+                  tabs.push('clinic-profile');
+                }
                 return { ...u, allowed_tabs: tabs };
               });
               resolve(parsed);
@@ -336,10 +360,21 @@ const dbHelpers = {
         sqliteDb.all("SELECT username, role, allowed_tabs FROM users ORDER BY username ASC", [], (err, rows) => {
           if (err) reject(err);
           else {
-            const parsed = rows.map(r => ({
-              ...r,
-              allowed_tabs: JSON.parse(r.allowed_tabs || '[]')
-            }));
+            const parsed = rows.map(r => {
+              let allowed_tabs = [];
+              try {
+                allowed_tabs = JSON.parse(r.allowed_tabs || '[]');
+              } catch (e) {
+                allowed_tabs = [];
+              }
+              if (r.role === 'admin' && !allowed_tabs.includes('clinic-profile')) {
+                allowed_tabs.push('clinic-profile');
+              }
+              return {
+                ...r,
+                allowed_tabs
+              };
+            });
             resolve(parsed);
           }
         });
@@ -804,6 +839,53 @@ const dbHelpers = {
   },
 
   // Billing
+  getBillingById: (id) => {
+    return new Promise((resolve, reject) => {
+      if (dbType === 'supabase') {
+        supabase.from('billing').select('*').eq('id', id).single()
+          .then(({ data, error }) => {
+            if (error || !data) return reject(error || new Error('Invoice not found'));
+            try { data.items = typeof data.items === 'string' ? JSON.parse(data.items) : (data.items || []); } catch (e) { data.items = []; }
+            resolve(data);
+          });
+      } else {
+        sqliteDb.get("SELECT * FROM billing WHERE id = ?", [id], (err, row) => {
+          if (err) return reject(err);
+          if (!row) return reject(new Error('Invoice not found'));
+          try { row.items = JSON.parse(row.items || '[]'); } catch (e) { row.items = []; }
+          resolve(row);
+        });
+      }
+    });
+  },
+
+  updateBillingPayment: (id, paymentMethod, paymentMethodSplit) => {
+    return new Promise((resolve, reject) => {
+      const updateData = {
+        payment_status: 'paid',
+        payment_method: paymentMethod || 'cash',
+        payment_method_split: paymentMethodSplit || null
+      };
+      if (dbType === 'supabase') {
+        supabase.from('billing').update(updateData).eq('id', id).select().single()
+          .then(({ data, error }) => {
+            if (error) return reject(error);
+            try { data.items = typeof data.items === 'string' ? JSON.parse(data.items) : (data.items || []); } catch (e) { data.items = []; }
+            resolve(data);
+          });
+      } else {
+        sqliteDb.run(
+          "UPDATE billing SET payment_status = 'paid', payment_method = ?, payment_method_split = ? WHERE id = ?",
+          [updateData.payment_method, updateData.payment_method_split, id],
+          function(err) {
+            if (err) return reject(err);
+            resolve({ id, ...updateData });
+          }
+        );
+      }
+    });
+  },
+
   getBilling: () => {
     return new Promise((resolve, reject) => {
       if (dbType === 'supabase') {
@@ -1069,6 +1151,98 @@ const dbHelpers = {
     } catch (error) {
       console.error('Error computing dashboard summary:', error);
       throw error;
+    }
+  },
+
+  // ── CLINIC PROFILE ────────────────────────────────────────────────────────
+  async getClinicProfile() {
+    const defaults = {
+      clinic_name: 'Care & Cure Clinic',
+      tagline: 'Advanced Healthcare & Wellness Centre',
+      address: '123 Medical Plaza, Suite 401',
+      city: 'Colombo 03',
+      country: 'Sri Lanka',
+      phone: '+94 11 555 7890',
+      email: 'info@careandcure.lk',
+      website: '',
+      reg_number: '',
+      footer_note: 'Thank you for trusting us with your health!',
+      disclaimer: 'This is a computer-generated invoice and does not require a physical signature.',
+      logo: ''
+    };
+
+    // Load local file fallback cache if present
+    let fallbackData = {};
+    const fallbackPath = path.join(__dirname, 'clinic_profile_fallback.json');
+    if (fs.existsSync(fallbackPath)) {
+      try {
+        fallbackData = JSON.parse(fs.readFileSync(fallbackPath, 'utf8') || '{}');
+      } catch (e) {
+        console.warn('Failed to parse clinic profile fallback cache:', e.message);
+      }
+    }
+
+    if (dbType === 'supabase') {
+      try {
+        const { data, error } = await supabase.from('clinic_profile').select('*').eq('id', 1).single();
+        if (error || !data) {
+          return { ...defaults, ...fallbackData };
+        }
+        return { ...defaults, ...fallbackData, ...data };
+      } catch {
+        return { ...defaults, ...fallbackData };
+      }
+    } else {
+      return new Promise((resolve) => {
+        sqliteDb.get('SELECT * FROM clinic_settings WHERE id = 1', (err, row) => {
+          if (err || !row) return resolve({ ...defaults, ...fallbackData });
+          try {
+            const saved = JSON.parse(row.profile_json || '{}');
+            resolve({ ...defaults, ...fallbackData, ...saved });
+          } catch {
+            resolve({ ...defaults, ...fallbackData });
+          }
+        });
+      });
+    }
+  },
+
+  async updateClinicProfile(profileData) {
+    // Write to local fallback file cache immediately as a local mirror/safeguard
+    try {
+      const fallbackPath = path.join(__dirname, 'clinic_profile_fallback.json');
+      fs.writeFileSync(fallbackPath, JSON.stringify(profileData, null, 2));
+    } catch (fsErr) {
+      console.warn('Failed to write clinic profile fallback cache:', fsErr.message);
+    }
+
+    if (dbType === 'supabase') {
+      try {
+        const { data: existing } = await supabase.from('clinic_profile').select('id').eq('id', 1).single();
+        if (existing) {
+          const { data, error } = await supabase.from('clinic_profile').update({ ...profileData, updated_at: new Date().toISOString() }).eq('id', 1).select().single();
+          if (error) throw error;
+          return data;
+        } else {
+          const { data, error } = await supabase.from('clinic_profile').insert([{ id: 1, ...profileData }]).select().single();
+          if (error) throw error;
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase clinic_profile upsert failed, using local file cache:', err.message);
+        return { ...profileData };
+      }
+    } else {
+      return new Promise((resolve, reject) => {
+        const json = JSON.stringify(profileData);
+        sqliteDb.run(`CREATE TABLE IF NOT EXISTS clinic_settings (id INTEGER PRIMARY KEY, profile_json TEXT)`, (createErr) => {
+          if (createErr) return reject(createErr);
+          sqliteDb.run(`INSERT OR REPLACE INTO clinic_settings (id, profile_json) VALUES (1, ?)`, [json], (err) => {
+            if (err) return reject(err);
+            resolve(profileData);
+          });
+        });
+      });
     }
   }
 };

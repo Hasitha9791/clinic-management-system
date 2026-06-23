@@ -7,3 +7,4 @@ setup_pooler_db.js
 test_supabase.js
 test_passwords.js
 test_patient_add.js
+clinic_profile_fallback.json

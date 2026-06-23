@@ -2,10 +2,26 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
-export default function Billing({ selectedPatient, selectedVisit, onSelectPatient, clearBillingContext }) {
+export default function Billing({ selectedPatient, selectedVisit, onSelectPatient, clearBillingContext, clinicProfile }) {
+  // Resolve clinic details — use profile if available, else fall back to defaults
+  const clinic = {
+    name: clinicProfile?.clinic_name || 'Care & Cure Clinic',
+    tagline: clinicProfile?.tagline || 'Advanced Healthcare & Wellness Centre',
+    address: clinicProfile?.address || '123 Medical Plaza, Suite 401',
+    city: clinicProfile?.city || 'Colombo 03',
+    country: clinicProfile?.country || 'Sri Lanka',
+    phone: clinicProfile?.phone || '+94 11 555 7890',
+    email: clinicProfile?.email || 'info@careandcure.lk',
+    footer_note: clinicProfile?.footer_note || 'Thank you for trusting us with your health!',
+    disclaimer: clinicProfile?.disclaimer || 'This is a computer-generated invoice and does not require a physical signature.',
+    reg_number: clinicProfile?.reg_number || '',
+    logo: clinicProfile?.logo || ''
+  };
+
   const [patients, setPatients] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [patientSearch, setPatientSearch] = useState('');
+  const [showAllPatients, setShowAllPatients] = useState(false);
   
   // Cart items: Array of { id, name, qty, price, type }
   const [cart, setCart] = useState([]);
@@ -30,6 +46,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
   const [generatedInvoice, setGeneratedInvoice] = useState(null);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -37,6 +54,11 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   const [historySearch, setHistorySearch] = useState('');
   const [historyFilterStatus, setHistoryFilterStatus] = useState('all');
   const [historyFilterDate, setHistoryFilterDate] = useState('');
+
+  // Pay Now modal state (for settling existing unpaid bills)
+  const [payNowBill, setPayNowBill] = useState(null); // the bill being settled
+  const [payNowMethod, setPayNowMethod] = useState('cash');
+  const [payNowLoading, setPayNowLoading] = useState(false);
 
   useEffect(() => {
     fetchInventory();
@@ -256,7 +278,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     return Math.max(0, total - ins);
   };
 
-  const handleGenerateInvoice = async () => {
+  const handleGenerateInvoice = () => {
     if (!selectedPatient) {
       if (window.showToast) window.showToast('Please select a patient first.', 'warning');
       return;
@@ -266,7 +288,6 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
       return;
     }
 
-    const total = calculateTotal();
     const copay = getPatientCopay();
 
     // Verify split payment sums to total copay
@@ -275,14 +296,21 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
       const card = parseFloat(splitCardAmount) || 0;
       if (Math.abs((cash + card) - copay) > 0.01) {
         if (window.showToast) {
-          window.showToast(`Split payment details are incorrect. Cash + Card must equal patient copay: Rs. ${copay.toFixed(2)} (Current sum: Rs. ${(cash + card).toFixed(2)})`, 'danger');
+          window.showToast(`Split payment details are incorrect. Cash + Card must equal patient copay: Rs. ${fmtAmt(copay)} (Current sum: Rs. ${fmtAmt(cash + card)})`, 'danger');
         }
         return;
       }
     }
 
+    setShowConfirmModal(true);
+  };
+
+  const executeGenerateInvoice = async () => {
     setLoading(true);
     setMessage({ type: '', text: '' });
+
+    const total = calculateTotal();
+    const copay = getPatientCopay();
 
     const payload = {
       patient_id: selectedPatient.id,
@@ -319,7 +347,15 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
         }, 300);
       } else {
         const errData = await res.json();
-        if (window.showToast) window.showToast(errData.error || 'Failed to generate invoice.', 'danger');
+        // 409 = duplicate payment blocked
+        if (res.status === 409) {
+          if (window.showToast) window.showToast(
+            '🚫 ' + (errData.error || 'This invoice has already been paid. Duplicate payment blocked.'),
+            'danger'
+          );
+        } else {
+          if (window.showToast) window.showToast(errData.error || 'Failed to generate invoice.', 'danger');
+        }
       }
     } catch (err) {
       console.error('Error generating invoice:', err);
@@ -335,10 +371,106 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     document.body.classList.remove('print-only-receipt');
   };
 
-  const handlePrintSalesReport = () => {
-    document.body.classList.add('print-only-sales-report');
-    window.print();
-    document.body.classList.remove('print-only-sales-report');
+  const handleExportBillingExcel = () => {
+    if (filteredBills.length === 0) {
+      if (window.showToast) window.showToast('No billing records to export.', 'warning');
+      return;
+    }
+
+    const now = new Date();
+    const reportDate = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+    const reportTime = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const filterLabel = historyFilterStatus === 'all' ? 'All Invoices'
+      : historyFilterStatus === 'paid' ? 'Paid Invoices'
+      : historyFilterStatus === 'unpaid' ? 'Unpaid / Outstanding'
+      : 'Voided Invoices';
+
+    const esc = (val) => {
+      const s = String(val ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+
+    const rows = [];
+
+    // ── CLINIC HEADER ─────────────────────────────────────────────────
+    rows.push([`${clinic.name} — Billing & Sales Audit Report`]);
+    rows.push([`Report Generated: ${reportDate} at ${reportTime}`]);
+    rows.push([`Filter Applied: ${filterLabel}${historyFilterDate ? '  |  Date: ' + historyFilterDate : ''}${historySearch ? '  |  Search: "' + historySearch + '"' : ''}`]);
+    rows.push([]);
+
+    // ── SUMMARY STATISTICS ────────────────────────────────────────────
+    rows.push(['SUMMARY']);
+    rows.push(['Total Invoices (filtered)', filteredBills.length]);
+    rows.push(['Total Revenue (Rs.)', historyStats.total.toFixed(2)]);
+    rows.push(['Collected — Paid (Rs.)', historyStats.collected.toFixed(2)]);
+    rows.push(['Outstanding — Unpaid (Rs.)', historyStats.outstanding.toFixed(2)]);
+    rows.push([]);
+
+    // ── INVOICE DETAIL TABLE ──────────────────────────────────────────
+    rows.push([
+      'Invoice ID',
+      'Billing Date',
+      'Patient Name',
+      'Patient ID',
+      'Contact',
+      'Payment Status',
+      'Payment Method',
+      'Insurance Provider',
+      'Insurance Amount (Rs.)',
+      'Patient Copay (Rs.)',
+      'Total Amount (Rs.)',
+      'Invoice Status',
+      'Items (Name x Qty @ Price)'
+    ]);
+
+    filteredBills.forEach(bill => {
+      const patientName = getPatientName(bill.patient_id);
+      const patientContact = getPatientPhone(bill.patient_id);
+      const itemsSummary = Array.isArray(bill.items)
+        ? bill.items.map(i => `${i.name} x${i.qty} @ Rs.${Number(i.price).toFixed(2)}`).join(' | ')
+        : '';
+      const status = bill.status === 'voided' ? 'VOIDED'
+        : bill.payment_status === 'paid' ? 'PAID'
+        : 'UNPAID';
+      const method = bill.status === 'voided' ? '—'
+        : bill.payment_method === 'split' ? `SPLIT (${bill.payment_method_split || ''})`
+        : (bill.payment_method || '—').toUpperCase();
+
+      rows.push([
+        bill.id,
+        bill.billing_date,
+        patientName,
+        bill.patient_id,
+        patientContact,
+        status,
+        method,
+        bill.insurance_provider || '—',
+        bill.insurance_amount > 0 ? Number(bill.insurance_amount).toFixed(2) : '0.00',
+        bill.copay_amount > 0 ? Number(bill.copay_amount).toFixed(2) : Number(bill.total_amount).toFixed(2),
+        Number(bill.total_amount).toFixed(2),
+        bill.status === 'voided' ? 'Voided' : 'Active',
+        itemsSummary
+      ]);
+    });
+
+    rows.push([]);
+    rows.push(['--- End of Report ---']);
+
+    // Build CSV with UTF-8 BOM for Excel
+    const csv = '\uFEFF' + rows.map(r => r.map(esc).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const fileName = `BillingReport_${historyFilterStatus}_${now.toISOString().slice(0,10)}.csv`;
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    if (window.showToast) window.showToast(`Billing report exported: ${fileName}`, 'success');
   };
 
   const handleVoidInvoice = async (id) => {
@@ -363,6 +495,35 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     }
   };
 
+  const handlePayNow = async () => {
+    if (!payNowBill) return;
+    setPayNowLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/billing/${payNowBill.id}/pay`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_method: payNowMethod })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        if (window.showToast) window.showToast(`Invoice ${payNowBill.id} settled successfully via ${payNowMethod.toUpperCase()}!`, 'success');
+        setPayNowBill(null);
+        fetchBillingHistory();
+      } else if (res.status === 409) {
+        if (window.showToast) window.showToast('🚫 ' + (data.error || 'This bill is already paid.'), 'danger');
+        setPayNowBill(null);
+        fetchBillingHistory();
+      } else {
+        if (window.showToast) window.showToast(data.error || 'Failed to process payment.', 'danger');
+      }
+    } catch (err) {
+      console.error('Error paying bill:', err);
+      if (window.showToast) window.showToast('Server error. Please try again.', 'danger');
+    } finally {
+      setPayNowLoading(false);
+    }
+  };
+
   const getPatientName = (patientId) => {
     const p = patients.find(pat => pat.id === patientId);
     return p ? p.name : patientId;
@@ -373,13 +534,31 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     return p ? p.contact || '' : '';
   };
 
+  // Patients who have at least one active unpaid bill
+  const unpaidPatientIds = new Set(
+    bills
+      .filter(b => b.payment_status === 'unpaid' && b.status !== 'voided')
+      .map(b => b.patient_id)
+  );
+
+  // Unpaid bill summary per patient (count + total outstanding)
+  const unpaidSummaryByPatient = bills.reduce((acc, b) => {
+    if (b.payment_status === 'unpaid' && b.status !== 'voided') {
+      if (!acc[b.patient_id]) acc[b.patient_id] = { count: 0, total: 0 };
+      acc[b.patient_id].count += 1;
+      acc[b.patient_id].total += b.total_amount;
+    }
+    return acc;
+  }, {});
+
   const filteredPatients = patients.filter((p) => {
     const term = patientSearch.toLowerCase();
-    return (
+    const matchesSearch =
       p.name.toLowerCase().includes(term) ||
       (p.contact && p.contact.toLowerCase().includes(term)) ||
-      p.id.toLowerCase().includes(term)
-    );
+      p.id.toLowerCase().includes(term);
+    const matchesUnpaid = showAllPatients || unpaidPatientIds.has(p.id);
+    return matchesSearch && matchesUnpaid;
   });
 
   const filteredBills = bills.filter((bill) => {
@@ -422,6 +601,10 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   };
 
   const historyStats = calculateHistoryStats();
+
+  // Accounting number formatter — Rs. 1,25,432.50 style
+  const fmtAmt = (num) =>
+    Number(num).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -477,50 +660,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
               </form>
             </div>
 
-            {/* Scan Simulation Controls */}
-            <div style={{
-              display: 'flex',
-              gap: '0.5rem',
-              alignItems: 'center',
-              fontSize: '0.85rem',
-              backgroundColor: 'rgba(14, 165, 233, 0.05)',
-              padding: '0.5rem 0.75rem',
-              borderRadius: '6px',
-              marginBottom: '1.5rem',
-              border: '1px solid var(--border)'
-            }}>
-              <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>🧪 Barcode Simulation:</span>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setBarcodeInput(e.target.value);
-                  }
-                }}
-                value={barcodeInput}
-                className="form-select"
-                style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem', width: 'auto', minWidth: '180px', height: 'auto', margin: 0 }}
-              >
-                <option value="">-- Choose Stock Item --</option>
-                {inventory.filter(i => i.barcode).map(i => (
-                  <option key={i.id} value={i.barcode}>{i.name} ({i.barcode})</option>
-                ))}
-                <option value="9999999999999">Non-existent Barcode (Error Test)</option>
-              </select>
-              <button 
-                type="button" 
-                onClick={() => {
-                  if (barcodeInput) {
-                    handleBarcodeScanSubmit();
-                  } else {
-                    if (window.showToast) window.showToast('Please select a stock item from simulation dropdown first.', 'warning');
-                  }
-                }} 
-                className="btn btn-secondary" 
-                style={{ padding: '0.25rem 0.6rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-              >
-                Simulate Scan
-              </button>
-            </div>
+
 
             {scanMessage.text && (
               <div className={`badge badge-${scanMessage.type}`} style={{
@@ -552,12 +692,12 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                     <option value="custom">Custom Non-Stock Charge</option>
                     <optgroup label="Pharmacy Stock (Drugs)">
                       {inventory.filter(i => i.type === 'drug').map(i => (
-                        <option key={i.id} value={i.id}>{i.name} (Rs. {i.price.toFixed(2)} / {i.unit}) [Stock: {i.qty}]</option>
+                        <option key={i.id} value={i.id}>{i.name} (Rs. {fmtAmt(i.price)} / {i.unit}) [Stock: {i.qty}]</option>
                       ))}
                     </optgroup>
                     <optgroup label="Clinical Equipment / Consumables">
                       {inventory.filter(i => i.type === 'equipment').map(i => (
-                        <option key={i.id} value={i.id}>{i.name} (Rs. {i.price.toFixed(2)} / {i.unit}) [Stock: {i.qty}]</option>
+                        <option key={i.id} value={i.id}>{i.name} (Rs. {fmtAmt(i.price)} / {i.unit}) [Stock: {i.qty}]</option>
                       ))}
                     </optgroup>
                   </select>
@@ -634,9 +774,9 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                           {item.type === 'drug' && <span className="badge badge-success" style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>Medication</span>}
                           {item.type === 'equipment' && <span className="badge badge-warning" style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>Supply</span>}
                         </td>
-                        <td>Rs. {item.price.toFixed(2)}</td>
+                        <td>Rs. {fmtAmt(item.price)}</td>
                         <td>{item.qty}</td>
-                        <td style={{ fontWeight: 600 }}>Rs. {(item.qty * item.price).toFixed(2)}</td>
+                        <td style={{ fontWeight: 600 }}>Rs. {fmtAmt(item.qty * item.price)}</td>
                         <td>
                           <button onClick={() => handleRemoveFromCart(index)} className="btn btn-danger" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
                             Remove
@@ -657,11 +797,43 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
           </div>
         ) : (
           <div>
-            <h3 className="card-title">Select Patient for POS Billing</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div>
+                <h3 className="card-title" style={{ margin: 0 }}>Select Patient for POS Billing</h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                  {showAllPatients
+                    ? `Showing all ${filteredPatients.length} patient(s)`
+                    : `Showing ${filteredPatients.length} patient(s) with outstanding bills`
+                  }
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAllPatients(prev => !prev)}
+                className={showAllPatients ? 'btn btn-secondary' : 'btn btn-primary'}
+                style={{ fontSize: '0.8rem', padding: '0.4rem 0.85rem', whiteSpace: 'nowrap' }}
+              >
+                {showAllPatients ? '🔴 Unpaid Only' : '👥 Show All Patients'}
+              </button>
+            </div>
+
+            {!showAllPatients && unpaidPatientIds.size === 0 && (
+              <div style={{
+                textAlign: 'center', padding: '2rem', background: 'var(--success-light)',
+                borderRadius: 'var(--radius)', border: '1px solid var(--success)', marginBottom: '1rem'
+              }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>✅</div>
+                <p style={{ color: 'var(--success)', fontWeight: 700, margin: 0 }}>All bills are settled!</p>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>No outstanding unpaid invoices at this time.</p>
+                <button onClick={() => setShowAllPatients(true)} className="btn btn-secondary" style={{ marginTop: '0.75rem', fontSize: '0.82rem' }}>
+                  Show All Patients
+                </button>
+              </div>
+            )}
+
             <div className="filter-bar">
               <input
                 type="text"
-                placeholder="Search patient by name or telephone..."
+                placeholder="Search by name, ID or telephone..."
                 value={patientSearch}
                 onChange={(e) => setPatientSearch(e.target.value)}
                 className="form-input search-input"
@@ -674,30 +846,59 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                   <tr>
                     <th>ID</th>
                     <th>Name</th>
+                    <th>Contact</th>
+                    <th>Outstanding Bills</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredPatients.length > 0 ? (
-                    filteredPatients.map((patient) => (
-                      <tr key={patient.id}>
-                        <td><span className="badge badge-primary">{patient.id}</span></td>
-                        <td style={{ fontWeight: 600 }}>{patient.name}</td>
-                        <td>
-                          <button
-                            onClick={() => onSelectPatient(patient)}
-                            className="btn btn-primary"
-                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                          >
-                            Select
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    filteredPatients.map((patient) => {
+                      const summary = unpaidSummaryByPatient[patient.id];
+                      return (
+                        <tr key={patient.id} style={summary ? { background: 'rgba(239,68,68,0.04)' } : {}}>
+                          <td><span className="badge badge-primary">{patient.id}</span></td>
+                          <td style={{ fontWeight: 600 }}>{patient.name}</td>
+                          <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>{patient.contact || '—'}</td>
+                          <td>
+                            {summary ? (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                  fontSize: '0.72rem', color: 'var(--danger)', fontWeight: 700,
+                                  background: 'var(--danger-light)', padding: '0.2rem 0.5rem',
+                                  borderRadius: '4px', border: '1px solid var(--danger)'
+                                }}>
+                                  ⚠️ {summary.count} Unpaid Bill{summary.count > 1 ? 's' : ''}
+                                </span>
+                                <span style={{ fontSize: '0.78rem', color: 'var(--danger)', fontWeight: 600 }}>
+                                  Rs. {fmtAmt(summary.total)} due
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: 600 }}>✅ All Paid</span>
+                            )}
+                          </td>
+                          <td>
+                            <button
+                              onClick={() => onSelectPatient(patient)}
+                              className={summary ? 'btn btn-danger' : 'btn btn-primary'}
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+                            >
+                              {summary ? '💳 Collect' : 'New Bill'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
-                      <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                        No patients found. Please onboard them first.
+                      <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>
+                        {patientSearch
+                          ? 'No matching patients found.'
+                          : showAllPatients
+                          ? 'No patients onboarded yet.'
+                          : 'No patients with outstanding bills found.'}
                       </td>
                     </tr>
                   )}
@@ -714,7 +915,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
         <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
           <span style={{ color: 'var(--text-muted)' }}>Subtotal:</span>
-          <span style={{ fontWeight: 600 }}>Rs. {calculateSubtotal().toFixed(2)}</span>
+          <span style={{ fontWeight: 600 }}>Rs. {fmtAmt(calculateSubtotal())}</span>
         </div>
 
         <div className="form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
@@ -777,13 +978,13 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
         <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
           <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Grand Total:</span>
-          <span style={{ fontWeight: 700, color: 'var(--dark)' }}>Rs. {calculateTotal().toFixed(2)}</span>
+          <span style={{ fontWeight: 700, color: 'var(--dark)' }}>Rs. {fmtAmt(calculateTotal())}</span>
         </div>
 
         {isInsurance && (
           <div className="form-group" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem', marginBottom: '0.5rem', backgroundColor: 'var(--success-light)', padding: '0.5rem', borderRadius: '4px' }}>
             <span style={{ color: 'var(--success)', fontWeight: 600 }}>Patient Copay (Payable):</span>
-            <span style={{ fontWeight: 700, color: 'var(--success)' }}>Rs. {getPatientCopay().toFixed(2)}</span>
+            <span style={{ fontWeight: 700, color: 'var(--success)' }}>Rs. {fmtAmt(getPatientCopay())}</span>
           </div>
         )}
 
@@ -907,29 +1108,58 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
             className="form-input"
             style={{ width: '180px' }}
           />
-          <button onClick={handlePrintSalesReport} className="btn btn-secondary">
-            🖨️ Print Sales Report
+          <button
+            onClick={handleExportBillingExcel}
+            className="btn btn-success"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', whiteSpace: 'nowrap', fontWeight: 600 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <polyline points="9 15 12 18 15 15"/>
+            </svg>
+            Export Excel
           </button>
         </div>
 
         {/* Stats summary for filtered history */}
         <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }} className="stock-summary-container">
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>FILTERED BILLS</span>
-            <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--dark)' }}>{filteredBills.length} Invoices</span>
+
+          {/* Filtered Bills count */}
+          <div style={{ flex: 1, minWidth: '160px', padding: '0.75rem 1.1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)', boxShadow: 'var(--shadow-sm)' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, display: 'block', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Filtered Bills</span>
+            <span style={{ fontWeight: 800, fontSize: '1.35rem', color: 'var(--dark)', fontVariantNumeric: 'tabular-nums' }}>{filteredBills.length}</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginLeft: '0.3rem' }}>invoices</span>
           </div>
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>TOTAL REVENUE</span>
-            <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--dark)' }}>Rs. {historyStats.total.toFixed(2)}</span>
+
+          {/* Total Revenue */}
+          <div style={{ flex: 1, minWidth: '160px', padding: '0.75rem 1.1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)', boxShadow: 'var(--shadow-sm)', borderLeft: '3px solid var(--primary)' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, display: 'block', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Total Revenue</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>Rs.</span>
+              <span style={{ fontWeight: 800, fontSize: '1.35rem', color: 'var(--dark)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmtAmt(historyStats.total)}</span>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--success-light)', borderLeft: '3px solid var(--success)' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600, display: 'block' }}>COLLECTED (PAID)</span>
-            <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: '1rem' }}>Rs. {historyStats.collected.toFixed(2)}</span>
+
+          {/* Collected (Paid) */}
+          <div style={{ flex: 1, minWidth: '160px', padding: '0.75rem 1.1rem', border: '1px solid var(--success)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--success-light)', boxShadow: 'var(--shadow-sm)', borderLeft: '3px solid var(--success)' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 700, display: 'block', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.3rem' }}>&#x2713; Collected (Paid)</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--success)', fontWeight: 600 }}>Rs.</span>
+              <span style={{ fontWeight: 800, fontSize: '1.35rem', color: 'var(--success)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmtAmt(historyStats.collected)}</span>
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.5rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--danger-light)', borderLeft: '3px solid var(--danger)' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600, display: 'block' }}>OUTSTANDING</span>
-            <span style={{ fontWeight: 700, color: 'var(--danger)', fontSize: '1rem' }}>Rs. {historyStats.outstanding.toFixed(2)}</span>
+
+          {/* Outstanding (Unpaid) */}
+          <div style={{ flex: 1, minWidth: '160px', padding: '0.75rem 1.1rem', border: '1px solid var(--danger)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--danger-light)', boxShadow: 'var(--shadow-sm)', borderLeft: '3px solid var(--danger)' }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 700, display: 'block', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: '0.3rem' }}>&#x26A0; Outstanding</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem' }}>
+              <span style={{ fontSize: '0.78rem', color: 'var(--danger)', fontWeight: 600 }}>Rs.</span>
+              <span style={{ fontWeight: 800, fontSize: '1.35rem', color: 'var(--danger)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>{fmtAmt(historyStats.outstanding)}</span>
+            </div>
           </div>
+
         </div>
 
         <div className="table-container">
@@ -968,25 +1198,50 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                         bill.payment_method.toUpperCase()
                       )}
                     </td>
-                    <td style={{ fontWeight: 700 }}>
-                      Rs. {bill.total_amount.toFixed(2)}
+                    <td style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>Rs. </span>{fmtAmt(bill.total_amount)}
                       {bill.insurance_amount > 0 && (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 500 }}>
-                          Ins: -Rs. {bill.insurance_amount.toFixed(2)}
+                        <div style={{ fontSize: '0.72rem', color: 'var(--success)', fontWeight: 500, marginTop: '0.15rem' }}>
+                          Ins: &minus;Rs. {fmtAmt(bill.insurance_amount)}
                         </div>
                       )}
                     </td>
                     <td>
-                      {bill.status !== 'voided' ? (
-                        <button
-                          onClick={() => handleVoidInvoice(bill.id)}
-                          className="btn btn-danger"
-                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                        >
-                          Void
-                        </button>
-                      ) : (
+                      {bill.status === 'voided' ? (
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Voided</span>
+                      ) : bill.payment_status === 'paid' ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                          <span style={{
+                            display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                            fontSize: '0.72rem', color: 'var(--success)', fontWeight: 700,
+                            background: 'var(--success-light)', padding: '0.2rem 0.5rem',
+                            borderRadius: '4px', border: '1px solid var(--success)'
+                          }}>🔒 PAID</span>
+                          <button
+                            onClick={() => handleVoidInvoice(bill.id)}
+                            className="btn btn-danger"
+                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }}
+                          >
+                            Void
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                          <button
+                            onClick={() => { setPayNowBill(bill); setPayNowMethod('cash'); }}
+                            className="btn btn-success"
+                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', whiteSpace: 'nowrap' }}
+                          >
+                            💳 Pay Now
+                          </button>
+                          <button
+                            onClick={() => handleVoidInvoice(bill.id)}
+                            className="btn btn-danger"
+                            style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }}
+                          >
+                            Void
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -1003,122 +1258,318 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
         </div>
       </div>
 
+      {/* Transaction Confirmation Modal */}
+      {showConfirmModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '400px', padding: '2rem', textAlign: 'center', borderRadius: '12px', boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>❓</div>
+            <h3 style={{ color: 'var(--dark)', fontWeight: 800, marginBottom: '0.75rem', fontSize: '1.25rem' }}>Process Transaction?</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.75rem' }}>
+              Are you sure you want to process this transaction? This will generate the invoice, record the collection, and update inventory stock.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button 
+                onClick={() => setShowConfirmModal(false)} 
+                className="btn btn-secondary" 
+                style={{ flex: 1, padding: '0.65rem', fontWeight: 600 }}
+              >
+                No, Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  executeGenerateInvoice();
+                }} 
+                className="btn btn-primary" 
+                style={{ flex: 1, padding: '0.65rem', fontWeight: 700 }}
+              >
+                Yes, Process
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Invoice Receipt Modal overlay */}
       {showReceipt && generatedInvoice && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" style={{ maxWidth: '720px', padding: '2rem' }}>
             <button onClick={() => setShowReceipt(false)} className="close-modal">&times;</button>
-            
+
+            {/* ── INVOICE PRINT AREA ───────────────────────────────────────── */}
             <div className="invoice-print-area" id="print-area">
-              <div className="invoice-header">
+
+              {/* CLINIC BRANDING HEADER */}
+              <div className="invoice-brand-bar">
+                <div className="invoice-brand-logo">
+                  {clinic.logo ? (
+                    <img src={clinic.logo} alt="Clinic Logo" style={{ width: '42px', height: '42px', objectFit: 'contain', borderRadius: '6px', background: '#fff', padding: '2px' }} />
+                  ) : (
+                    <svg width="42" height="42" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect width="42" height="42" rx="10" fill="white" fillOpacity="0.18"/>
+                      <rect x="17" y="7" width="8" height="28" rx="3" fill="white"/>
+                      <rect x="7" y="17" width="28" height="8" rx="3" fill="white"/>
+                    </svg>
+                  )}
+                  <div>
+                    <div className="invoice-brand-name">{clinic.name}</div>
+                    <div className="invoice-brand-tagline">{clinic.tagline}</div>
+                  </div>
+                </div>
+                <div className="invoice-brand-meta">
+                  <div className="invoice-brand-number">INVOICE</div>
+                  <div className="invoice-brand-id">#{generatedInvoice.id}</div>
+                </div>
+              </div>
+
+              {/* CLINIC INFO + INVOICE META ROW */}
+              <div className="invoice-header" style={{ borderBottom: '2px solid #e8f5f2', paddingBottom: '1.25rem', marginBottom: '1.5rem' }}>
                 <div className="clinic-info">
-                  <h2>🏥 Care & Cure Clinic</h2>
-                  <p>123 Medical Plaza, Suite 401</p>
-                  <p>Colombo, Sri Lanka</p>
-                  <p>Tel: +94 11 555 7890</p>
+                  <p style={{ fontWeight: 700, color: '#1a2e2b', marginBottom: '0.25rem', fontSize: '0.9rem' }}>{clinic.name}</p>
+                  <p>{clinic.address}</p>
+                  <p>{clinic.city}, {clinic.country}</p>
+                  <p>Tel: {clinic.phone}</p>
+                  <p>Email: {clinic.email}</p>
+                  {clinic.reg_number && <p style={{ fontSize: '0.78rem', color: '#6b8f88', marginTop: '0.2rem' }}>Reg: {clinic.reg_number}</p>}
                 </div>
-                <div className="invoice-title">
-                  <h1>INVOICE</h1>
-                  <p>Invoice #: <strong>{generatedInvoice.id}</strong></p>
-                  <p>Date: {generatedInvoice.billing_date}</p>
+                <div className="invoice-title" style={{ textAlign: 'right' }}>
+                  <table style={{ marginLeft: 'auto', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ color: '#6b8f88', paddingRight: '0.75rem', paddingBottom: '0.3rem' }}>Invoice No:</td>
+                        <td style={{ fontWeight: 700, color: '#1a2e2b' }}>{generatedInvoice.id}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: '#6b8f88', paddingRight: '0.75rem', paddingBottom: '0.3rem' }}>Date:</td>
+                        <td style={{ fontWeight: 600 }}>{generatedInvoice.billing_date}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: '#6b8f88', paddingRight: '0.75rem', paddingBottom: '0.3rem' }}>Visit ID:</td>
+                        <td style={{ fontWeight: 600 }}>{generatedInvoice.visit_id || '—'}</td>
+                      </tr>
+                      <tr>
+                        <td style={{ color: '#6b8f88', paddingRight: '0.75rem' }}>Status:</td>
+                        <td>
+                          <span style={{
+                            fontWeight: 700, fontSize: '0.75rem', padding: '0.15rem 0.5rem',
+                            borderRadius: '4px',
+                            background: generatedInvoice.payment_status === 'paid' ? '#dcfce7' : '#fee2e2',
+                            color: generatedInvoice.payment_status === 'paid' ? '#16a34a' : '#dc2626'
+                          }}>
+                            {generatedInvoice.payment_status.toUpperCase()}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <div className="invoice-bill-to">
-                <h4>Patient Details:</h4>
-                <p><strong>{selectedPatient.name}</strong></p>
-                <p>ID: {selectedPatient.id}</p>
-                {selectedPatient.contact && <p>Contact: {selectedPatient.contact}</p>}
-                {selectedPatient.address && <p>Address: {selectedPatient.address}</p>}
+              {/* PATIENT DETAILS */}
+              <div style={{
+                background: '#f0faf7', border: '1px solid #c6e8df', borderRadius: '8px',
+                padding: '0.85rem 1.1rem', marginBottom: '1.5rem',
+                display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b8f88', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>Bill To — Patient</div>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: '#1a2e2b' }}>{selectedPatient.name}</div>
+                  <div style={{ fontSize: '0.83rem', color: '#6b8f88', marginTop: '0.15rem' }}>Patient ID: <strong style={{ color: '#1a2e2b' }}>{selectedPatient.id}</strong></div>
+                  {selectedPatient.contact && <div style={{ fontSize: '0.83rem', color: '#6b8f88' }}>Contact: <strong style={{ color: '#1a2e2b' }}>{selectedPatient.contact}</strong></div>}
+                  {selectedPatient.address && <div style={{ fontSize: '0.83rem', color: '#6b8f88' }}>Address: {selectedPatient.address}</div>}
+                </div>
+                {generatedInvoice.insurance_provider && (
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#6b8f88', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.3rem' }}>Insurance Claim</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1a2e2b' }}>{generatedInvoice.insurance_provider}</div>
+                    <div style={{ fontSize: '0.83rem', color: '#16a34a', fontWeight: 600 }}>Covered: Rs. {fmtAmt(generatedInvoice.insurance_amount)}</div>
+                  </div>
+                )}
               </div>
 
+              {/* LINE ITEMS TABLE */}
               <table className="invoice-items-table">
                 <thead>
-                  <tr>
-                    <th>Item/Service Description</th>
-                    <th style={{ textAlign: 'right' }}>Qty</th>
-                    <th style={{ textAlign: 'right' }}>Price</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
+                  <tr style={{ background: '#f0faf7' }}>
+                    <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>#</th>
+                    <th style={{ textAlign: 'left', padding: '0.6rem 0.75rem' }}>Item / Service Description</th>
+                    <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Qty</th>
+                    <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Unit Price</th>
+                    <th style={{ textAlign: 'right', padding: '0.6rem 0.75rem' }}>Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   {generatedInvoice.items.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.name}</td>
-                      <td style={{ textAlign: 'right' }}>{item.qty}</td>
-                      <td style={{ textAlign: 'right' }}>Rs. {item.price.toFixed(2)}</td>
-                      <td style={{ textAlign: 'right' }}>Rs. {(item.qty * item.price).toFixed(2)}</td>
+                    <tr key={index} style={{ background: index % 2 === 0 ? '#ffffff' : '#f9fdfb' }}>
+                      <td style={{ padding: '0.6rem 0.75rem', color: '#6b8f88', fontSize: '0.82rem' }}>{index + 1}</td>
+                      <td style={{ padding: '0.6rem 0.75rem', fontWeight: 500 }}>{item.name}</td>
+                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right' }}>{item.qty}</td>
+                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#6b8f88' }}>Rs. </span>{fmtAmt(item.price)}
+                      </td>
+                      <td style={{ padding: '0.6rem 0.75rem', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#6b8f88' }}>Rs. </span>{fmtAmt(item.qty * item.price)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
 
+              {/* TOTALS SECTION */}
               <div className="invoice-summary">
-                <div className="invoice-summary-box">
+                <div className="invoice-summary-box" style={{ width: '260px' }}>
                   <div className="summary-row">
-                    <span>Subtotal:</span>
-                    <span>Rs. {(generatedInvoice.total_amount / (1 + (taxRate / 100))).toFixed(2)}</span>
+                    <span style={{ color: '#6b8f88' }}>Subtotal:</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#6b8f88' }}>Rs. </span>
+                      {fmtAmt(generatedInvoice.total_amount / (1 + (taxRate / 100)))}
+                    </span>
                   </div>
                   {taxRate > 0 && (
                     <div className="summary-row">
-                      <span>Tax ({taxRate}%):</span>
-                      <span>Rs. {(generatedInvoice.total_amount - (generatedInvoice.total_amount / (1 + (taxRate / 100)))).toFixed(2)}</span>
+                      <span style={{ color: '#6b8f88' }}>Tax ({taxRate}%):</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        <span style={{ fontSize: '0.72rem', color: '#6b8f88' }}>Rs. </span>
+                        {fmtAmt(generatedInvoice.total_amount - (generatedInvoice.total_amount / (1 + (taxRate / 100))))}
+                      </span>
                     </div>
                   )}
-                  <div className="summary-row total">
-                    <span>Grand Total:</span>
-                    <span>Rs. {generatedInvoice.total_amount.toFixed(2)}</span>
-                  </div>
-
                   {generatedInvoice.insurance_amount > 0 && (
-                    <>
-                      <div className="summary-row" style={{ color: 'var(--success)', fontWeight: 600 }}>
-                        <span>Insurance Pay:</span>
-                        <span>Rs. {generatedInvoice.insurance_amount.toFixed(2)}</span>
-                      </div>
-                      <div className="summary-row" style={{ borderTop: '1px solid var(--border)', fontWeight: 700 }}>
-                        <span>Patient Copay:</span>
-                        <span>Rs. {generatedInvoice.copay_amount.toFixed(2)}</span>
-                      </div>
-                    </>
+                    <div className="summary-row" style={{ color: '#16a34a', fontWeight: 600 }}>
+                      <span>Insurance ({generatedInvoice.insurance_provider}):</span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        &minus;<span style={{ fontSize: '0.72rem' }}>Rs. </span>
+                        {fmtAmt(generatedInvoice.insurance_amount)}
+                      </span>
+                    </div>
                   )}
+                  <div className="summary-row total" style={{ background: '#f0faf7', padding: '0.6rem 0.75rem', borderRadius: '6px', marginTop: '0.25rem' }}>
+                    <span>{generatedInvoice.insurance_amount > 0 ? 'Patient Copay:' : 'Grand Total:'}</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ fontSize: '0.8rem' }}>Rs. </span>
+                      {fmtAmt(generatedInvoice.insurance_amount > 0 ? generatedInvoice.copay_amount : generatedInvoice.total_amount)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div style={{ textAlign: 'center', marginTop: '2rem', borderTop: '1px dashed var(--border)', paddingTop: '1.5rem' }}>
-                {generatedInvoice.payment_status === 'paid' ? (
-                  <div>
+              {/* PAYMENT STAMP + FOOTER */}
+              <div style={{
+                borderTop: '2px dashed #c6e8df', marginTop: '1.75rem', paddingTop: '1.5rem',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '1rem'
+              }}>
+                {/* Left: stamp + method */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                  {generatedInvoice.payment_status === 'paid' ? (
                     <div className="paid-stamp">PAID</div>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                      Settled via {generatedInvoice.payment_method.toUpperCase()}
-                      {generatedInvoice.payment_method_split && ` (${generatedInvoice.payment_method_split.replace(/,/g, ', ')})`}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
+                  ) : (
                     <div className="unpaid-stamp">UNPAID</div>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--danger)', marginTop: '0.5rem' }}>
-                      Payment Due
-                    </p>
+                  )}
+                  <div style={{ fontSize: '0.8rem', color: '#6b8f88' }}>
+                    {generatedInvoice.payment_status === 'paid' ? (
+                      <>Settled via <strong style={{ color: '#1a2e2b' }}>{generatedInvoice.payment_method.toUpperCase()}</strong>
+                        {generatedInvoice.payment_method_split && (
+                          <div style={{ marginTop: '0.2rem' }}>({generatedInvoice.payment_method_split.replace(/,/g, ', ')})</div>
+                        )}
+                      </>
+                    ) : (
+                      <span style={{ color: '#dc2626', fontWeight: 600 }}>Payment Due</span>
+                    )}
+                    {generatedInvoice.insurance_provider && (
+                      <div style={{ marginTop: '0.2rem', color: '#0e7490', fontWeight: 600 }}>
+                        Claim: {generatedInvoice.insurance_provider}
+                      </div>
+                    )}
                   </div>
-                )}
-                
-                {generatedInvoice.insurance_provider && (
-                  <p style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, marginTop: '0.25rem' }}>
-                    Claim Provider: {generatedInvoice.insurance_provider.toUpperCase()}
-                  </p>
-                )}
-                
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '1.5rem' }}>Thank you for visiting Care & Cure Clinic!</p>
+                </div>
+
+                {/* Right: footer note */}
+                <div style={{ textAlign: 'right', fontSize: '0.78rem', color: '#6b8f88' }}>
+                  <div style={{ fontWeight: 700, color: '#2d6a60', marginBottom: '0.2rem' }}>{clinic.name}</div>
+                  <div>{clinic.address}, {clinic.city}, {clinic.country}</div>
+                  <div>Tel: {clinic.phone} &nbsp;|&nbsp; {clinic.email}</div>
+                  <div style={{ marginTop: '0.4rem', fontStyle: 'italic' }}>{clinic.footer_note}</div>
+                </div>
+              </div>
+
+              {/* BOTTOM DISCLAIMER */}
+              <div style={{
+                marginTop: '1.25rem', padding: '0.6rem 0.75rem',
+                background: '#f9fdfb', borderRadius: '6px',
+                fontSize: '0.72rem', color: '#9ab5af', textAlign: 'center', border: '1px solid #e8f5f2'
+              }}>
+                {clinic.disclaimer}
               </div>
             </div>
+            {/* ── END INVOICE PRINT AREA ───────────────────────────────────── */}
 
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
               <button onClick={() => setShowReceipt(false)} className="btn btn-secondary">
                 Close
               </button>
-              <button onClick={handlePrint} className="btn btn-success">
-                🖨️ Print / Save PDF
+              <button onClick={handlePrint} className="btn btn-success" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+                  <rect x="6" y="14" width="12" height="8"/>
+                </svg>
+                Print / Save PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PAY NOW MODAL ─────────────────────────────────────────────── */}
+      {payNowBill && (
+        <div className="modal-overlay" onClick={() => setPayNowBill(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <button onClick={() => setPayNowBill(null)} className="close-modal">&times;</button>
+            <h3 className="card-title" style={{ marginBottom: '0.5rem' }}>💳 Settle Outstanding Bill</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.5rem' }}>
+              Invoice <strong>{payNowBill.id}</strong> is currently <span style={{ color: 'var(--danger)', fontWeight: 700 }}>UNPAID</span>.
+              Select a payment method to settle it now.
+            </p>
+
+            <div style={{ background: 'var(--light)', borderRadius: 'var(--radius-sm)', padding: '1rem', marginBottom: '1.5rem', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Patient:</span>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{getPatientName(payNowBill.patient_id)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Invoice Date:</span>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{payNowBill.billing_date}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: '0.5rem', marginTop: '0.5rem' }}>
+                <span style={{ color: 'var(--danger)', fontWeight: 700 }}>Amount Due:</span>
+                <span style={{ color: 'var(--danger)', fontWeight: 700, fontSize: '1.1rem' }}>
+                  Rs. {(payNowBill.copay_amount > 0 ? payNowBill.copay_amount : payNowBill.total_amount).toFixed(2)}
+                </span>
+              </div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label">Payment Method</label>
+              <select
+                value={payNowMethod}
+                onChange={(e) => setPayNowMethod(e.target.value)}
+                className="form-select"
+              >
+                <option value="cash">💵 Cash Payment</option>
+                <option value="card">💳 Card / POS Terminal</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <button onClick={() => setPayNowBill(null)} className="btn btn-secondary" style={{ flex: 1 }}>
+                Cancel
+              </button>
+              <button
+                onClick={handlePayNow}
+                className="btn btn-success"
+                style={{ flex: 2 }}
+                disabled={payNowLoading}
+              >
+                {payNowLoading ? 'Processing...' : `✅ Confirm Payment (${payNowMethod.toUpperCase()})`}
               </button>
             </div>
           </div>

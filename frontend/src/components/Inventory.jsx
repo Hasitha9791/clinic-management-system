@@ -213,10 +213,72 @@ export default function Inventory() {
 
   const { totalCost, totalSelling, expectedProfit } = calculateStockStats();
 
-  const handlePrint = () => {
-    document.body.classList.add('print-only-stock-report');
-    window.print();
-    document.body.classList.remove('print-only-stock-report');
+  const handleExportExcel = () => {
+    if (filteredInventory.length === 0) {
+      if (window.showToast) window.showToast("No inventory records found to export.", "warning");
+      return;
+    }
+
+    try {
+      const headers = [
+        'Item ID',
+        'Item Name',
+        'Category',
+        'Barcode',
+        'Measurement Unit',
+        'Available Stock',
+        'Min Qty (Reorder Limit)',
+        'Cost Price (Buying Cost)',
+        'Selling Price',
+        'Total Asset Cost',
+        'Total Potential Revenue',
+        'Expected Profit Margin',
+        'Active Batches Count'
+      ];
+
+      const rows = filteredInventory.map(item => {
+        const itemBatches = batchesMap[item.id] || [];
+        const totalAssetCost = (item.cost_price || 0) * (item.qty || 0);
+        const totalRevenue = (item.price || 0) * (item.qty || 0);
+        const expectedProfit = totalRevenue - totalAssetCost;
+        
+        return [
+          item.id,
+          item.name,
+          item.type === 'drug' ? 'Drug' : 'Equipment',
+          item.barcode || 'N/A',
+          item.unit,
+          item.qty,
+          item.min_qty,
+          item.cost_price.toFixed(2),
+          item.price.toFixed(2),
+          totalAssetCost.toFixed(2),
+          totalRevenue.toFixed(2),
+          expectedProfit.toFixed(2),
+          itemBatches.length
+        ];
+      });
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(val => `"${val !== undefined && val !== null ? String(val).replace(/"/g, '""') : ''}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Ayu_Health_Suite_Inventory_Stock.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      if (window.showToast) window.showToast("Inventory stock report exported successfully.", "success");
+    } catch (err) {
+      console.error("Export error:", err);
+      if (window.showToast) window.showToast("Failed to export inventory.", "danger");
+    }
   };
 
   // Helper to compute batch expiry status badge
@@ -254,16 +316,16 @@ export default function Inventory() {
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }} className="stock-summary-container">
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
+        <div className="stock-stats-grid">
+          <div style={{ padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>STOCK ASSET COST</span>
             <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1.1rem' }}>Rs. {totalCost.toFixed(2)}</span>
           </div>
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
+          <div style={{ padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>POTENTIAL REVENUE</span>
             <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1.1rem' }}>Rs. {totalSelling.toFixed(2)}</span>
           </div>
-          <div style={{ flex: 1, minWidth: '150px', padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--success-light)', borderLeft: '3px solid var(--success)' }}>
+          <div style={{ padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--success-light)', borderLeft: '3px solid var(--success)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 600, display: 'block' }}>EXPECTED MARGIN</span>
             <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: '1.1rem' }}>Rs. {expectedProfit.toFixed(2)}</span>
           </div>
@@ -287,8 +349,13 @@ export default function Inventory() {
             <option value="drug">Drugs / Pharmacy</option>
             <option value="equipment">Equipment / Supplies</option>
           </select>
-          <button onClick={handlePrint} className="btn btn-secondary">
-            🖨️ Print Stock Report
+          <button 
+            onClick={handleExportExcel} 
+            className="btn btn-secondary"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Excel Download
           </button>
         </div>
 
@@ -379,7 +446,7 @@ export default function Inventory() {
                       {isExpanded && (
                         <tr>
                           <td colSpan="6" style={{ backgroundColor: 'var(--light)', padding: '1.5rem', borderLeft: '3px solid var(--primary)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '1.5rem' }}>
+                            <div className="inventory-batch-grid">
                               
                               {/* Batches List */}
                               <div>

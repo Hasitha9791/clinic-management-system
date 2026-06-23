@@ -542,6 +542,61 @@ body {
   margin-bottom: 1.5rem;
 }
 
+/* ── Invoice Brand Header Bar ── */
+.invoice-brand-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, hsl(172, 66%, 30%) 0%, hsl(172, 66%, 22%) 100%);
+  color: white;
+  padding: 1.1rem 1.5rem;
+  border-radius: 8px 8px 0 0;
+  margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.invoice-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.invoice-brand-name {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: white;
+}
+
+.invoice-brand-tagline {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.75);
+  margin-top: 0.15rem;
+  letter-spacing: 0.02em;
+}
+
+.invoice-brand-meta {
+  text-align: right;
+}
+
+.invoice-brand-number {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.65);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.invoice-brand-id {
+  font-size: 1rem;
+  font-weight: 700;
+  color: white;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.04em;
+  margin-top: 0.15rem;
+}
+
 .invoice-header {
   display: flex;
   justify-content: space-between;
@@ -661,13 +716,37 @@ body {
   opacity: 0.85;
 }
 
+/* Stock stats and batch grids (responsive layout) */
+.stock-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.inventory-batch-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1.5rem;
+}
+
 /* ==========================================
    MOBILE & RESPONSIVE STYLES
    ========================================== */
 
-@media (max-width: 992px) {
+@media (max-width: 1250px) {
   .grid-sidebar-layout {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 992px) {
+  .stock-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .inventory-batch-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
   }
 }
 
@@ -711,6 +790,11 @@ body {
   .filter-bar {
     flex-direction: column;
     align-items: stretch;
+  }
+  
+  .filter-bar > * {
+    width: 100% !important;
+    max-width: 100% !important;
   }
   
   .search-input {
@@ -767,7 +851,6 @@ body {
   /* Strip card containers and layout shells of backgrounds, borders, shadows, offsets, and paddings */
   .app-container,
   .main-content,
-  .invoice-print-area,
   .table-container,
   .grid-2,
   .grid-3,
@@ -778,6 +861,21 @@ body {
     max-width: 100% !important;
     min-width: 0 !important;
     padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  .invoice-print-area {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    padding: 1.5rem !important;
     margin: 0 !important;
     border: none !important;
     box-shadow: none !important;
@@ -854,6 +952,39 @@ body {
     border-bottom: 2px solid #000 !important;
     padding-bottom: 0.5rem !important;
     color: #000 !important;
+  }
+
+  /* Preserve brand bar color in PDF — force background printing */
+  .invoice-brand-bar {
+    background: hsl(172, 66%, 28%) !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color: white !important;
+    border-radius: 8px 8px 0 0 !important;
+    margin: -1.5rem -1.5rem 1.5rem -1.5rem !important;
+    padding: 1rem 1.5rem !important;
+  }
+  .invoice-brand-name,
+  .invoice-brand-id {
+    color: white !important;
+  }
+  .invoice-brand-tagline,
+  .invoice-brand-number {
+    color: rgba(255,255,255,0.8) !important;
+  }
+
+  /* Hide print/close action buttons from the PDF output */
+  .close-modal,
+  .modal-content > div:last-child {
+    display: none !important;
+  }
+
+  /* Make modal content full-page on print */
+  .modal-content {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
   }
 }
 

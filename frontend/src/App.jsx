@@ -7,6 +7,7 @@ import Inventory from './components/Inventory';
 import Appointments from './components/Appointments';
 import Communications from './components/Communications';
 import Users from './components/Users';
+import ClinicProfile from './components/ClinicProfile';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
@@ -25,6 +26,7 @@ export default function App() {
   const [selectedVisit, setSelectedVisit] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [clinicProfile, setClinicProfile] = useState(null);
   
   // Floating Toast Notifications State
   const [toasts, setToasts] = useState([]);
@@ -34,6 +36,17 @@ export default function App() {
       setCurrentDateTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Fetch clinic profile globally so all screens can use it
+  useEffect(() => {
+    fetch(`${API_URL}/api/clinic-profile`)
+      .then(r => r.json())
+      .then(data => setClinicProfile(data))
+      .catch(() => {});
+    const onProfileUpdate = (e) => setClinicProfile(e.detail);
+    window.addEventListener('clinic-profile-updated', onProfileUpdate);
+    return () => window.removeEventListener('clinic-profile-updated', onProfileUpdate);
   }, []);
 
   useEffect(() => {
@@ -78,7 +91,7 @@ export default function App() {
   useEffect(() => {
     if (user) {
       const allowed = Array.isArray(user.allowed_tabs) ? user.allowed_tabs : (
-        user.role === 'admin' ? ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users'] : (
+        user.role === 'admin' ? ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile'] : (
           user.role === 'doctor' ? ['dashboard', 'onboarding', 'consultations', 'communications'] : (
             user.role === 'receptionist' ? ['dashboard', 'onboarding', 'appointments', 'communications'] : (
               user.role === 'cashier' ? ['dashboard', 'billing', 'inventory', 'communications'] : ['dashboard']
@@ -177,6 +190,11 @@ export default function App() {
   const isTabAllowed = (tabName) => {
     if (!user) return false;
     
+    // Admins always have access to clinic-profile and users settings tabs
+    if (user.role === 'admin' && (tabName === 'clinic-profile' || tabName === 'users')) {
+      return true;
+    }
+    
     if (Array.isArray(user.allowed_tabs)) {
       return user.allowed_tabs.includes(tabName);
     }
@@ -193,7 +211,8 @@ export default function App() {
     if (role === 'cashier') {
       return ['dashboard', 'billing', 'inventory', 'communications'].includes(tabName);
     }
-    
+    // clinic-profile is admin-only
+    if (tabName === 'clinic-profile') return role === 'admin';
     return false;
   };
 
@@ -390,6 +409,17 @@ export default function App() {
                 </button>
               </li>
             )}
+            {isTabAllowed('clinic-profile') && (
+              <li className="nav-item">
+                <button
+                  onClick={() => selectTab('clinic-profile')}
+                  className={`nav-button ${activeTab === 'clinic-profile' ? 'active' : ''}`}
+                >
+                  <svg className="nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  Clinic Profile
+                </button>
+              </li>
+            )}
           </ul>
         </nav>
 
@@ -437,6 +467,7 @@ export default function App() {
               {activeTab === 'inventory' && 'Medical Items & Equipment Stock'}
               {activeTab === 'communications' && 'Communications Log'}
               {activeTab === 'users' && 'Users & Permissions'}
+              {activeTab === 'clinic-profile' && 'Clinic Profile Settings'}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -481,6 +512,7 @@ export default function App() {
             selectedVisit={selectedVisit} 
             onSelectPatient={setSelectedPatient}
             clearBillingContext={clearBillingContext}
+            clinicProfile={clinicProfile}
           />
         )}
         
@@ -494,6 +526,10 @@ export default function App() {
 
         {activeTab === 'users' && (
           <Users />
+        )}
+
+        {activeTab === 'clinic-profile' && (
+          <ClinicProfile />
         )}
       </main>
 

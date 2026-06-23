@@ -19,6 +19,8 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
   });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
+  const [showBillingPrompt, setShowBillingPrompt] = useState(false);
+  const [savedVisitForBilling, setSavedVisitForBilling] = useState(null);
 
   // Fetch all patients for selection list if none is selected
   useEffect(() => {
@@ -98,10 +100,9 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
         });
         fetchVisitHistory(selectedPatient.id);
         
-        // Show option to immediately proceed to billing for this visit
-        if (window.confirm("Consultation recorded. Would you like to generate the bill for this visit now?")) {
-          onGoToBilling(selectedPatient, savedVisit);
-        }
+        // Save to state to trigger the custom Billing Confirmation Modal
+        setSavedVisitForBilling(savedVisit);
+        setShowBillingPrompt(true);
       } else {
         const errData = await res.json();
         const errMsg = errData.error || 'Failed to save visit details.';
@@ -387,6 +388,43 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Select a patient to view their medical/visit history.</p>
         )}
       </div>
+
+      {/* Billing Redirect Confirmation Modal */}
+      {showBillingPrompt && savedVisitForBilling && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '420px', padding: '2.25rem 2rem', textAlign: 'center', borderRadius: '12px', boxShadow: 'var(--shadow-lg)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>📄</div>
+            <h3 style={{ color: 'var(--dark)', fontWeight: 800, marginBottom: '0.75rem', fontSize: '1.25rem' }}>Generate Bill?</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '1.75rem' }}>
+              Consultation recorded successfully. Would you like to generate the bill for this visit now?
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
+              <button 
+                onClick={() => {
+                  setShowBillingPrompt(false);
+                  setSavedVisitForBilling(null);
+                }} 
+                className="btn btn-secondary" 
+                style={{ flex: 1, padding: '0.65rem', fontWeight: 600 }}
+              >
+                No, Later
+              </button>
+              <button 
+                onClick={() => {
+                  setShowBillingPrompt(false);
+                  const visit = savedVisitForBilling;
+                  setSavedVisitForBilling(null);
+                  onGoToBilling(selectedPatient, visit);
+                }} 
+                className="btn btn-primary" 
+                style={{ flex: 1, padding: '0.65rem', fontWeight: 700 }}
+              >
+                Yes, Bill Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -69,6 +69,34 @@ app.get('/api/dashboard/summary', async (req, res) => {
 });
 
 // ==========================================
+// CLINIC PROFILE ENDPOINTS
+// ==========================================
+
+app.get('/api/clinic-profile', async (req, res) => {
+  try {
+    const profile = await db.getClinicProfile();
+    res.json(profile);
+  } catch (error) {
+    console.error('Error fetching clinic profile:', error);
+    res.status(500).json({ error: 'Failed to fetch clinic profile' });
+  }
+});
+
+app.put('/api/clinic-profile', async (req, res) => {
+  try {
+    const { clinic_name, tagline, address, city, country, phone, email, website, reg_number, footer_note, disclaimer, logo } = req.body;
+    if (!clinic_name || !phone) {
+      return res.status(400).json({ error: 'Clinic name and phone number are required' });
+    }
+    const updated = await db.updateClinicProfile({ clinic_name, tagline, address, city, country, phone, email, website, reg_number, footer_note, disclaimer, logo });
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating clinic profile:', error);
+    res.status(500).json({ error: 'Failed to update clinic profile' });
+  }
+});
+
+// ==========================================
 // PATIENTS ENDPOINTS
 // ==========================================
 
@@ -387,6 +415,26 @@ app.post('/api/billing', async (req, res) => {
       return res.status(400).json({ error: 'Patient ID and at least one item are required' });
     }
 
+    // ── DUPLICATE PAYMENT GUARD ──────────────────────────────────────────────
+    // If this invoice is being submitted as "paid", check whether there is
+    // already an active (non-voided) PAID bill for the same visit.
+    if (payment_status === 'paid' && visit_id) {
+      try {
+        const allBills = await db.getBilling();
+        const existingPaid = allBills.find(
+          b => b.visit_id === visit_id && b.payment_status === 'paid' && b.status !== 'voided'
+        );
+        if (existingPaid) {
+          return res.status(409).json({
+            error: `This visit already has a paid invoice (${existingPaid.id}). Void the existing invoice first, or use "Pay Now" on an existing unpaid bill.`
+          });
+        }
+      } catch (checkErr) {
+        console.warn('Could not perform duplicate payment check:', checkErr.message);
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     const newBill = {
       id: generateId('INV'),
       patient_id,
@@ -400,7 +448,7 @@ app.post('/api/billing', async (req, res) => {
       insurance_amount: insurance_amount ? parseFloat(insurance_amount) : 0.0,
       copay_amount: copay_amount ? parseFloat(copay_amount) : 0.0,
       payment_method_split: payment_method_split || null,
-      status: 'paid'
+      status: 'paid'   // Supabase constraint: 'paid' | 'voided'. payment_status tracks paid/unpaid separately.
     };
 
     // Save billing record
@@ -457,6 +505,38 @@ app.put('/api/billing/:id/void', async (req, res) => {
     res.status(500).json({ error: error.message || 'Failed to void bill' });
   }
 });
+
+// Settle an existing UNPAID bill — prevents re-payment of already-paid invoices
+app.put('/api/billing/:id/pay', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { payment_method, payment_method_split } = req.body;
+
+    // Fetch the bill first
+    const bill = await db.getBillingById(id);
+
+    // Guard: already paid?
+    if (bill.payment_status === 'paid') {
+      return res.status(409).json({
+        error: `Invoice ${id} is already marked as PAID. Duplicate payment blocked.`
+      });
+    }
+
+    // Guard: voided?
+    if (bill.status === 'voided') {
+      return res.status(409).json({
+        error: `Invoice ${id} has been voided and cannot be paid.`
+      });
+    }
+
+    const updated = await db.updateBillingPayment(id, payment_method || 'cash', payment_method_split || null);
+    res.json(updated);
+  } catch (error) {
+    console.error('Error settling bill:', error);
+    res.status(500).json({ error: error.message || 'Failed to process payment' });
+  }
+});
+
 
 // ==========================================
 // COMMUNICATIONS LOG ENDPOINTS

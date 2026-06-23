@@ -10,11 +10,12 @@ const SYSTEM_TABS = [
   { id: 'billing', label: '💳 POS & Billing Cart' },
   { id: 'inventory', label: '📦 Stock Inventory' },
   { id: 'communications', label: '💬 Communications Log' },
-  { id: 'users', label: '🔧 Users & Permissions' }
+  { id: 'users', label: '🔧 Users & Permissions' },
+  { id: 'clinic-profile', label: '⚙️ Clinic Profile Settings' }
 ];
 
 const DEFAULT_ROLE_TABS = {
-  admin: ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users'],
+  admin: ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile'],
   doctor: ['dashboard', 'onboarding', 'consultations', 'communications'],
   receptionist: ['dashboard', 'onboarding', 'appointments', 'communications'],
   cashier: ['dashboard', 'billing', 'inventory', 'communications'],
