@@ -31,15 +31,22 @@ const wwebClient = new Client({
     dataPath: path.join(__dirname, '.wwebjs_auth')
   }),
   userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  // Pin a known-working WhatsApp Web version to avoid version mismatch after scan
+  webVersionCache: {
+    type: 'remote',
+    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901134-alpha.html'
+  },
   puppeteer: {
-    headless: isProduction ? true : false,
+    headless: true,  // Always headless — visible window breaks session on close
     executablePath: puppeteerExecutablePath || undefined,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-blink-features=AutomationControlled',
       '--disable-dev-shm-usage',
-      '--disable-gpu'
+      '--disable-gpu',
+      '--disable-extensions',
+      '--window-size=1280,720'
     ]
   }
 });
@@ -71,10 +78,18 @@ wwebClient.on('qr', (qr) => {
   });
 });
 
+wwebClient.on('loading_screen', (percent, message) => {
+  console.log(`[WHATSAPP] Loading: ${percent}% — ${message}`);
+});
+
+wwebClient.on('authenticated', () => {
+  console.log('[WHATSAPP] Authenticated successfully! Waiting for ready...');
+});
+
 wwebClient.on('ready', () => {
   isWwebReady = true;
   qrText = null;
-  console.log('WhatsApp Web Client is fully connected and ready!');
+  console.log('[WHATSAPP] Client is fully connected and ready!');
 
   // Clean up physical QR images when connected
   const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
@@ -84,7 +99,8 @@ wwebClient.on('ready', () => {
 });
 
 wwebClient.on('auth_failure', (msg) => {
-  console.error('WhatsApp Web Authentication failure:', msg);
+  isWwebReady = false;
+  console.error('[WHATSAPP] Authentication failure:', msg);
 });
 
 wwebClient.on('disconnected', async (reason) => {
