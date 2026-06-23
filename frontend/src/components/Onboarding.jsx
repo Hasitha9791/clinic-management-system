@@ -119,11 +119,11 @@ export default function Onboarding({ onPatientSelect }) {
         'Symptoms', 
         'Diagnosis', 
         'Treatment', 
-        'Vitals (BP)', 
-        'Vitals (Pulse)', 
-        'Vitals (Temp)', 
-        'Vitals (Weight)', 
-        'Vitals (SpO2)', 
+        'Blood Pressure (BP)', 
+        'Pulse Rate', 
+        'Temperature', 
+        'Weight (kg)', 
+        'Oxygen Level (SpO2)', 
         'Doctor Notes'
       ];
       
