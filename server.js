@@ -61,7 +61,6 @@ wwebClient.on('qr', (qr) => {
   // Generate PNG files of the QR code for easier scanning
   const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
   const qrRootPath = path.join(__dirname, 'qr.png');
-  const qrArtifactPath = 'C:/Users/Hasitha/.gemini/antigravity/brain/6e726681-e8f5-47c4-ba11-6ceaf568492f/qr.png';
 
   QRCode.toFile(qrPublicPath, qr, { margin: 2, scale: 8 }, (err) => {
     if (err) console.error('Error generating public/qr.png:', err.message);
@@ -69,10 +68,6 @@ wwebClient.on('qr', (qr) => {
 
   QRCode.toFile(qrRootPath, qr, { margin: 2, scale: 8 }, (err) => {
     if (err) console.error('Error generating qr.png:', err.message);
-  });
-
-  QRCode.toFile(qrArtifactPath, qr, { margin: 2, scale: 8 }, (err) => {
-    if (err) console.error('Error generating artifact/qr.png:', err.message);
   });
 });
 
@@ -92,27 +87,42 @@ wwebClient.on('auth_failure', (msg) => {
   console.error('WhatsApp Web Authentication failure:', msg);
 });
 
-wwebClient.on('disconnected', (reason) => {
+wwebClient.on('disconnected', async (reason) => {
   isWwebReady = false;
   qrText = null;
   console.warn('WhatsApp Web Client was disconnected:', reason);
-  // Attempt to re-initialize after a short delay to allow browser to exit and unlock files
-  setTimeout(() => {
+  // Delay then fully destroy + re-initialize to avoid Puppeteer binding conflicts
+  setTimeout(async () => {
     try {
-      console.log('Re-initializing WhatsApp Web Client...');
-      wwebClient.initialize();
-    } catch (err) {
-      console.error('Failed to re-initialize WhatsApp client:', err.message);
+      console.log('Destroying WhatsApp Web Client before re-init...');
+      await wwebClient.destroy();
+    } catch (e) {
+      console.warn('Destroy warning (safe to ignore):', e.message);
     }
+    await initWhatsApp();
   }, 5000);
 });
 
-// Start the WhatsApp Client in the background
-try {
-  wwebClient.initialize();
-} catch (err) {
-  console.error('Error starting WhatsApp Web Client:', err.message);
+// Robust async initializer with retry — prevents process crash on ERR_TIMED_OUT
+async function initWhatsApp(attempt = 1) {
+  const MAX_ATTEMPTS = 5;
+  const RETRY_DELAY_MS = 30000; // 30 seconds between retries
+  try {
+    console.log(`[WHATSAPP] Initialization attempt ${attempt}...`);
+    await wwebClient.initialize();
+  } catch (err) {
+    console.error(`[WHATSAPP] Init failed (attempt ${attempt}): ${err.message}`);
+    if (attempt < MAX_ATTEMPTS) {
+      console.log(`[WHATSAPP] Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+      setTimeout(() => initWhatsApp(attempt + 1), RETRY_DELAY_MS);
+    } else {
+      console.error('[WHATSAPP] Max retry attempts reached. WhatsApp messaging will be unavailable.');
+    }
+  }
 }
+
+// Start the WhatsApp Client in the background (non-blocking, non-crashing)
+initWhatsApp();
 
 // WhatsApp Web Status Endpoints
 app.get('/api/whatsapp/status', (req, res) => {
