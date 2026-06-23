@@ -14,7 +14,8 @@ const DEFAULT_PROFILE = {
   reg_number: '',
   footer_note: '',
   disclaimer: '',
-  logo: ''
+  logo: '',
+  consultation_fee: 1500.00
 };
 
 export default function ClinicProfile() {
@@ -198,9 +199,21 @@ export default function ClinicProfile() {
                 <input
                   type="text"
                   className="form-input"
-                  value={profile.reg_number}
+                  value={profile.reg_number || ''}
                   onChange={e => handleChange('reg_number', e.target.value)}
                   placeholder="e.g. MOH-LK-00123"
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Default Doctor Consultation Fee (Rs.)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  value={profile.consultation_fee === undefined ? 1500.00 : profile.consultation_fee}
+                  onChange={e => handleChange('consultation_fee', parseFloat(e.target.value) || 0.0)}
+                  placeholder="e.g. 1500.00"
+                  min="0"
+                  step="50"
                 />
               </div>
             </div>

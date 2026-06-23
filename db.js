@@ -1168,7 +1168,8 @@ const dbHelpers = {
       reg_number: '',
       footer_note: 'Thank you for trusting us with your health!',
       disclaimer: 'This is a computer-generated invoice and does not require a physical signature.',
-      logo: ''
+      logo: '',
+      consultation_fee: 1500.00
     };
 
     // Load local file fallback cache if present
@@ -1219,15 +1220,32 @@ const dbHelpers = {
     if (dbType === 'supabase') {
       try {
         const { data: existing } = await supabase.from('clinic_profile').select('id').eq('id', 1).single();
+        let data, error;
         if (existing) {
-          const { data, error } = await supabase.from('clinic_profile').update({ ...profileData, updated_at: new Date().toISOString() }).eq('id', 1).select().single();
-          if (error) throw error;
-          return data;
+          const res = await supabase.from('clinic_profile').update({ ...profileData, updated_at: new Date().toISOString() }).eq('id', 1).select().single();
+          data = res.data;
+          error = res.error;
         } else {
-          const { data, error } = await supabase.from('clinic_profile').insert([{ id: 1, ...profileData }]).select().single();
-          if (error) throw error;
-          return data;
+          const res = await supabase.from('clinic_profile').insert([{ id: 1, ...profileData }]).select().single();
+          data = res.data;
+          error = res.error;
         }
+        
+        // If updating with consultation_fee fails (e.g. column doesn't exist), retry without it
+        if (error) {
+          console.warn('Supabase clinic_profile save error, retrying without consultation_fee:', error.message);
+          const { consultation_fee, ...safeProfileData } = profileData;
+          if (existing) {
+            const retryRes = await supabase.from('clinic_profile').update({ ...safeProfileData, updated_at: new Date().toISOString() }).eq('id', 1).select().single();
+            if (retryRes.error) throw retryRes.error;
+            data = retryRes.data;
+          } else {
+            const retryRes = await supabase.from('clinic_profile').insert([{ id: 1, ...safeProfileData }]).select().single();
+            if (retryRes.error) throw retryRes.error;
+            data = retryRes.data;
+          }
+        }
+        return { ...profileData, ...data };
       } catch (err) {
         console.warn('Supabase clinic_profile upsert failed, using local file cache:', err.message);
         return { ...profileData };

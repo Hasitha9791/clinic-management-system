@@ -84,11 +84,11 @@ app.get('/api/clinic-profile', async (req, res) => {
 
 app.put('/api/clinic-profile', async (req, res) => {
   try {
-    const { clinic_name, tagline, address, city, country, phone, email, website, reg_number, footer_note, disclaimer, logo } = req.body;
+    const { clinic_name, tagline, address, city, country, phone, email, website, reg_number, footer_note, disclaimer, logo, consultation_fee } = req.body;
     if (!clinic_name || !phone) {
       return res.status(400).json({ error: 'Clinic name and phone number are required' });
     }
-    const updated = await db.updateClinicProfile({ clinic_name, tagline, address, city, country, phone, email, website, reg_number, footer_note, disclaimer, logo });
+    const updated = await db.updateClinicProfile({ clinic_name, tagline, address, city, country, phone, email, website, reg_number, footer_note, disclaimer, logo, consultation_fee });
     res.json(updated);
   } catch (error) {
     console.error('Error updating clinic profile:', error);
