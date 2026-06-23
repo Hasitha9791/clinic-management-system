@@ -22,6 +22,23 @@ const DEFAULT_ROLE_TABS = {
   custom: ['dashboard']
 };
 
+const getShortTabLabel = (tabId) => {
+  const matchingTab = SYSTEM_TABS.find(t => t.id === tabId);
+  if (!matchingTab) return tabId;
+  switch (tabId) {
+    case 'dashboard': return '📊 Dashboard';
+    case 'onboarding': return '👤 Onboarding';
+    case 'appointments': return '📅 Queue';
+    case 'consultations': return '🩺 Consults';
+    case 'billing': return '💳 Billing';
+    case 'inventory': return '📦 Inventory';
+    case 'communications': return '💬 Messages';
+    case 'users': return '🔧 Users';
+    case 'clinic-profile': return '⚙️ Profile';
+    default: return matchingTab.label;
+  }
+};
+
 const getAvatarBg = (role) => {
   switch (role) {
     case 'admin': return 'linear-gradient(135deg, hsl(350, 75%, 55%), hsl(0, 75%, 45%))';
@@ -285,11 +302,204 @@ export default function Users() {
 
   return (
     <div className="grid-sidebar-layout">
-      {/* Left Column: Admin Forms */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+      {/* Left Column: Registry Tables (Occupies 2fr) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* Users List Card */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <h3 className="card-title" style={{ marginBottom: '1rem' }}>👥 Active System Users</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            Registered staff accounts, their default roles, and their custom screen credentials.
+          </p>
+
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr style={{ background: 'var(--light)' }}>
+                  <th style={{ padding: '0.6rem 0.8rem' }}>Staff User</th>
+                  <th style={{ padding: '0.6rem 0.8rem' }}>Authorized Portal Tabs</th>
+                  <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>System Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length > 0 ? (
+                  users.map(u => (
+                    <tr key={u.username} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          {/* Staff Avatar with dynamic color and role initials */}
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            background: getAvatarBg(u.role),
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            textTransform: 'uppercase',
+                            border: '1.5px solid var(--border)',
+                            boxShadow: 'var(--shadow-sm)',
+                            flexShrink: 0
+                          }}>
+                            {u.username.slice(0, 2)}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, color: 'var(--dark)', fontSize: '0.88rem', lineHeight: '1.2' }}>{u.username}</div>
+                            <div style={{ marginTop: '0.15rem' }}>
+                              <span className="badge" style={{ ...getRoleBadgeStyle(u.role), fontSize: '0.6rem', padding: '0.02rem 0.35rem', borderRadius: '4px' }}>
+                                {u.role}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', maxWidth: '100%' }}>
+                          {(Array.isArray(u.allowed_tabs) ? u.allowed_tabs : []).map(tabId => (
+                            <span 
+                              key={tabId} 
+                              className="badge" 
+                              style={{ 
+                                fontSize: '0.68rem', 
+                                padding: '0.12rem 0.45rem', 
+                                border: '1px solid',
+                                ...getTabPillStyle(tabId)
+                              }}
+                            >
+                              {getShortTabLabel(tabId)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>
+                        {u.username !== 'admin' ? (
+                          <button
+                            onClick={() => handleDeleteUser(u.username)}
+                            className="btn"
+                            style={{ 
+                              padding: '0.3rem 0.5rem', 
+                              fontSize: '0.75rem',
+                              backgroundColor: 'var(--danger-light)',
+                              color: 'var(--danger)',
+                              border: '1px solid hsl(0, 75%, 90%)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                              transition: 'var(--transition)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--danger)';
+                              e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--danger-light)';
+                              e.currentTarget.style.color = 'var(--danger)';
+                            }}
+                          >
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              <line x1="10" y1="11" x2="10" y2="17"></line>
+                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                            Delete
+                          </button>
+                        ) : (
+                          <span style={{ 
+                            fontSize: '0.72rem', 
+                            color: 'var(--success)', 
+                            fontWeight: 700, 
+                            backgroundColor: 'var(--success-light)', 
+                            padding: '0.2rem 0.45rem', 
+                            borderRadius: '4px',
+                            border: '1px solid hsl(145, 45%, 88%)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.2rem'
+                          }}>
+                            🛡️ Master
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                      No system users loaded.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Doctors List Card */}
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <h3 className="card-title" style={{ marginBottom: '1rem' }}>Doctors & Specialists Registry</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+            List of medical professionals eligible to see patients and manage consultation slots.
+          </p>
+
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr style={{ background: 'var(--light)' }}>
+                  <th style={{ padding: '0.6rem 0.8rem' }}>ID</th>
+                  <th style={{ padding: '0.6rem 0.8rem' }}>Doctor Name</th>
+                  <th style={{ padding: '0.6rem 0.8rem' }}>Specialty</th>
+                  <th style={{ padding: '0.6rem 0.8rem' }}>Contact</th>
+                  <th style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {doctors.length > 0 ? (
+                  doctors.map(d => (
+                    <tr key={d.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span className="badge badge-primary" style={{ padding: '0.15rem 0.4rem', fontSize: '0.75rem' }}>{d.id}</span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--dark)', fontSize: '0.88rem' }}>{d.name}</span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span className="badge" style={{ backgroundColor: 'var(--light)', color: 'var(--text-muted)', border: '1px solid var(--border)', fontSize: '0.75rem', padding: '0.15rem 0.4rem' }}>{d.specialty}</span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem' }}>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text)' }}>{d.contact || 'N/A'}</span>
+                      </td>
+                      <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleDeleteDoctor(d.id, d.name)}
+                          className="btn btn-danger"
+                          style={{ padding: '0.3rem 0.5rem', fontSize: '0.75rem' }}
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                      No doctors registered.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Right Column: Admin Forms (Occupies 1fr) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         {/* Create User Form */}
-        <div className="card">
-          <h3 className="card-title">Add System User & Set Access</h3>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <h3 className="card-title" style={{ marginBottom: '1rem' }}>Add System User & Set Access</h3>
           
           {message.text && (
             <div className={`badge badge-${message.type}`} style={{ width: '100%', padding: '0.75rem', marginBottom: '1.25rem', borderRadius: 'var(--radius-sm)' }}>
@@ -298,7 +508,7 @@ export default function Users() {
           )}
 
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">Username *</label>
               <input
                 type="text"
@@ -310,7 +520,7 @@ export default function Users() {
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">Password *</label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
@@ -354,7 +564,7 @@ export default function Users() {
               </div>
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">System Role Template *</label>
               <select
                 value={formData.role}
@@ -400,14 +610,14 @@ export default function Users() {
         </div>
 
         {/* Create Doctor Form */}
-        <div className="card">
-          <h3 className="card-title">Add Doctor / Consultant</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <h3 className="card-title" style={{ marginBottom: '1rem' }}>Add Doctor / Consultant</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
             Register a clinical doctor and their specialty to make them available in the queue and appointment manager.
           </p>
 
           <form onSubmit={handleAddDoctor}>
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">Doctor Name *</label>
               <input
                 type="text"
@@ -419,7 +629,7 @@ export default function Users() {
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">Specialty / Department *</label>
               <input
                 type="text"
@@ -431,7 +641,7 @@ export default function Users() {
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">Contact Number (Optional)</label>
               <input
                 type="text"
@@ -446,201 +656,6 @@ export default function Users() {
               {doctorLoading ? 'Adding...' : 'Add Doctor to Registry'}
             </button>
           </form>
-        </div>
-      </div>
-
-      {/* Right Column: Registry Tables */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        {/* Users List Card */}
-        <div className="card">
-          <h3 className="card-title">👥 Active System Users</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-            Registered staff accounts, their default roles, and their custom screen credentials.
-          </p>
-
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr style={{ background: 'var(--light)' }}>
-                  <th style={{ padding: '0.85rem 1rem' }}>Staff User</th>
-                  <th style={{ padding: '0.85rem 1rem' }}>Authorized Portal Tabs</th>
-                  <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>System Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.length > 0 ? (
-                  users.map(u => (
-                    <tr key={u.username} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '0.85rem 1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                          {/* Staff Avatar with dynamic color and role initials */}
-                          <div style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '50%',
-                            background: getAvatarBg(u.role),
-                            color: '#fff',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 700,
-                            fontSize: '0.88rem',
-                            textTransform: 'uppercase',
-                            border: '2.5px solid var(--border)',
-                            boxShadow: 'var(--shadow-sm)'
-                          }}>
-                            {u.username.slice(0, 2)}
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 700, color: 'var(--dark)', fontSize: '0.92rem' }}>{u.username}</div>
-                            <div style={{ marginTop: '0.2rem' }}>
-                              <span className="badge" style={{ ...getRoleBadgeStyle(u.role), fontSize: '0.62rem', padding: '0.05rem 0.4rem', borderRadius: '4px' }}>
-                                {u.role}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.85rem 1rem' }}>
-                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', maxWidth: '300px' }}>
-                          {(Array.isArray(u.allowed_tabs) ? u.allowed_tabs : []).map(tabId => {
-                            const matchingTab = SYSTEM_TABS.find(t => t.id === tabId);
-                            return (
-                              <span 
-                                key={tabId} 
-                                className="badge" 
-                                style={{ 
-                                  fontSize: '0.68rem', 
-                                  padding: '0.12rem 0.45rem', 
-                                  border: '1px solid',
-                                  ...getTabPillStyle(tabId)
-                                }}
-                              >
-                                {matchingTab ? matchingTab.label : tabId}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
-                        {u.username !== 'admin' ? (
-                          <button
-                            onClick={() => handleDeleteUser(u.username)}
-                            className="btn"
-                            style={{ 
-                              padding: '0.35rem 0.65rem', 
-                              fontSize: '0.78rem',
-                              backgroundColor: 'var(--danger-light)',
-                              color: 'var(--danger)',
-                              border: '1px solid hsl(0, 75%, 90%)',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '0.25rem',
-                              transition: 'var(--transition)'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--danger)';
-                              e.currentTarget.style.color = '#fff';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--danger-light)';
-                              e.currentTarget.style.color = 'var(--danger)';
-                            }}
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              <line x1="10" y1="11" x2="10" y2="17"></line>
-                              <line x1="14" y1="11" x2="14" y2="17"></line>
-                            </svg>
-                            Delete User
-                          </button>
-                        ) : (
-                          <span style={{ 
-                            fontSize: '0.75rem', 
-                            color: 'var(--success)', 
-                            fontWeight: 700, 
-                            backgroundColor: 'var(--success-light)', 
-                            padding: '0.25rem 0.5rem', 
-                            borderRadius: '4px',
-                            border: '1px solid hsl(145, 45%, 88%)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.25rem'
-                          }}>
-                            🛡️ Master User
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
-                      No system users loaded.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Doctors List Card */}
-        <div className="card">
-          <h3 className="card-title">Doctors & Specialists Registry</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-            List of medical professionals eligible to see patients and manage consultation slots.
-          </p>
-
-          <div className="table-container">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Doctor Name</th>
-                  <th>Specialty</th>
-                  <th>Contact</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {doctors.length > 0 ? (
-                  doctors.map(d => (
-                    <tr key={d.id}>
-                      <td>
-                        <span className="badge badge-primary">{d.id}</span>
-                      </td>
-                      <td>
-                        <span style={{ fontWeight: 600, color: 'var(--dark)' }}>{d.name}</span>
-                      </td>
-                      <td>
-                        <span className="badge" style={{ backgroundColor: 'var(--light)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{d.specialty}</span>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: '0.85rem' }}>{d.contact || 'N/A'}</span>
-                      </td>
-                      <td>
-                        <button
-                          onClick={() => handleDeleteDoctor(d.id, d.name)}
-                          className="btn btn-danger"
-                          style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No doctors registered.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
       </div>
     </div>
