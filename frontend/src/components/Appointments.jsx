@@ -63,6 +63,59 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
     }
   };
 
+  const handleExportExcel = () => {
+    if (appointments.length === 0) {
+      if (window.showToast) window.showToast("No queue tokens found for this date to export.", "warning");
+      return;
+    }
+
+    try {
+      const headers = [
+        'Token No',
+        'Appointment ID',
+        'Patient ID',
+        'Patient Name',
+        'Contact No',
+        'Doctor Name',
+        'Appointment Date',
+        'Time Slot',
+        'Status'
+      ];
+
+      const rows = appointments.map(appt => [
+        `#${appt.token_number}`,
+        appt.id,
+        appt.patient_id,
+        getPatientName(appt.patient_id),
+        getPatientPhone(appt.patient_id),
+        appt.doctor_name,
+        appt.appointment_date,
+        appt.time_slot,
+        appt.status
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(r => r.map(val => `"${val || ''}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Ayu_Health_Suite_Live_Queue_${selectedDate}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      if (window.showToast) window.showToast("Live token queue dashboard exported successfully.", "success");
+    } catch (err) {
+      console.error("Export error:", err);
+      if (window.showToast) window.showToast("Failed to export token queue.", "danger");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.patient_id) {
@@ -256,7 +309,17 @@ export default function Appointments({ onSelectPatient, onGoToConsultation }) {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
           <h3 className="card-title" style={{ marginBottom: 0 }}>Live Token Queue Dashboard</h3>
-          <span className="current-date" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>📅 {selectedDate}</span>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button 
+              onClick={handleExportExcel}
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.8rem', fontSize: '0.82rem' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Excel Download
+            </button>
+            <span className="current-date" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>📅 {selectedDate}</span>
+          </div>
         </div>
 
         <div className="table-container">
