@@ -154,6 +154,20 @@ body {
   box-shadow: 0 4px 12px rgba(19, 165, 147, 0.25);
 }
 
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  opacity: 0.65;
+  transition: var(--transition);
+}
+
+.nav-button:hover .nav-icon,
+.nav-button.active .nav-icon {
+  opacity: 1;
+}
+
 /* Main Content Area */
 .main-content {
   flex: 1;
