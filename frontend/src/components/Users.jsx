@@ -22,6 +22,65 @@ const DEFAULT_ROLE_TABS = {
   custom: ['dashboard']
 };
 
+const getAvatarBg = (role) => {
+  switch (role) {
+    case 'admin': return 'linear-gradient(135deg, hsl(350, 75%, 55%), hsl(0, 75%, 45%))';
+    case 'doctor': return 'linear-gradient(135deg, var(--primary), var(--secondary))';
+    case 'receptionist': return 'linear-gradient(135deg, hsl(38, 90%, 55%), hsl(25, 95%, 45%))';
+    case 'cashier': return 'linear-gradient(135deg, hsl(260, 60%, 55%), hsl(240, 65%, 45%))';
+    default: return 'linear-gradient(135deg, hsl(180, 12%, 50%), hsl(180, 12%, 38%))';
+  }
+};
+
+const getRoleBadgeStyle = (role) => {
+  switch (role) {
+    case 'admin':
+      return { backgroundColor: 'var(--danger-light)', color: 'var(--danger)', border: '1px solid hsl(0, 75%, 90%)', textTransform: 'uppercase' };
+    case 'doctor':
+      return { backgroundColor: 'var(--success-light)', color: 'var(--success)', border: '1px solid hsl(145, 45%, 88%)', textTransform: 'uppercase' };
+    case 'receptionist':
+      return { backgroundColor: 'var(--warning-light)', color: 'var(--warning)', border: '1px solid hsl(38, 90%, 90%)', textTransform: 'uppercase' };
+    case 'cashier':
+      return { backgroundColor: 'var(--primary-light)', color: 'var(--primary)', border: '1px solid hsl(172, 40%, 88%)', textTransform: 'uppercase' };
+    default:
+      return { backgroundColor: '#f3f4f6', color: '#4b5563', border: '1px solid var(--border)', textTransform: 'uppercase' };
+  }
+};
+
+const getTabPillStyle = (tabId) => {
+  switch (tabId) {
+    case 'users':
+    case 'clinic-profile':
+      return { 
+        backgroundColor: 'var(--danger-light)', 
+        color: 'var(--danger)', 
+        borderColor: 'hsl(0, 75%, 90%)',
+        fontWeight: 600
+      };
+    case 'billing':
+    case 'inventory':
+      return { 
+        backgroundColor: 'var(--primary-light)', 
+        color: 'var(--primary)', 
+        borderColor: 'hsl(172, 40%, 88%)',
+        fontWeight: 600
+      };
+    case 'consultations':
+      return { 
+        backgroundColor: 'var(--success-light)', 
+        color: 'var(--success)', 
+        borderColor: 'hsl(145, 45%, 88%)',
+        fontWeight: 600
+      };
+    default:
+      return { 
+        backgroundColor: 'var(--light)', 
+        color: 'var(--text-muted)', 
+        borderColor: 'var(--border)' 
+      };
+  }
+};
+
 export default function Users() {
   const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({
@@ -394,7 +453,7 @@ export default function Users() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
         {/* Users List Card */}
         <div className="card">
-          <h3 className="card-title">Active System Users</h3>
+          <h3 className="card-title">👥 Active System Users</h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
             Registered staff accounts, their default roles, and their custom screen credentials.
           </p>
@@ -402,25 +461,48 @@ export default function Users() {
           <div className="table-container">
             <table className="data-table">
               <thead>
-                <tr>
-                  <th>Username</th>
-                  <th>Role</th>
-                  <th>Allowed Screens</th>
-                  <th>Action</th>
+                <tr style={{ background: 'var(--light)' }}>
+                  <th style={{ padding: '0.85rem 1rem' }}>Staff User</th>
+                  <th style={{ padding: '0.85rem 1rem' }}>Authorized Portal Tabs</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>System Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length > 0 ? (
                   users.map(u => (
-                    <tr key={u.username}>
-                      <td>
-                        <span style={{ fontWeight: 600, color: 'var(--dark)' }}>{u.username}</span>
+                    <tr key={u.username} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '0.85rem 1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                          {/* Staff Avatar with dynamic color and role initials */}
+                          <div style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            background: getAvatarBg(u.role),
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 700,
+                            fontSize: '0.88rem',
+                            textTransform: 'uppercase',
+                            border: '2.5px solid var(--border)',
+                            boxShadow: 'var(--shadow-sm)'
+                          }}>
+                            {u.username.slice(0, 2)}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, color: 'var(--dark)', fontSize: '0.92rem' }}>{u.username}</div>
+                            <div style={{ marginTop: '0.2rem' }}>
+                              <span className="badge" style={{ ...getRoleBadgeStyle(u.role), fontSize: '0.62rem', padding: '0.05rem 0.4rem', borderRadius: '4px' }}>
+                                {u.role}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td>
-                        <span className="badge badge-primary" style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>{u.role}</span>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', maxWidth: '250px' }}>
+                      <td style={{ padding: '0.85rem 1rem' }}>
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', maxWidth: '300px' }}>
                           {(Array.isArray(u.allowed_tabs) ? u.allowed_tabs : []).map(tabId => {
                             const matchingTab = SYSTEM_TABS.find(t => t.id === tabId);
                             return (
@@ -429,36 +511,72 @@ export default function Users() {
                                 className="badge" 
                                 style={{ 
                                   fontSize: '0.68rem', 
-                                  padding: '0.1rem 0.35rem', 
-                                  backgroundColor: tabId === 'users' ? 'var(--warning-light)' : 'var(--light)',
-                                  color: tabId === 'users' ? 'var(--warning)' : 'var(--text-muted)',
-                                  border: '1px solid var(--border)'
+                                  padding: '0.12rem 0.45rem', 
+                                  border: '1px solid',
+                                  ...getTabPillStyle(tabId)
                                 }}
                               >
-                                {matchingTab ? matchingTab.label.split(' ').slice(1).join(' ') : tabId}
+                                {matchingTab ? matchingTab.label : tabId}
                               </span>
                             );
                           })}
                         </div>
                       </td>
-                      <td>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
                         {u.username !== 'admin' ? (
                           <button
                             onClick={() => handleDeleteUser(u.username)}
-                            className="btn btn-danger"
-                            style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                            className="btn"
+                            style={{ 
+                              padding: '0.35rem 0.65rem', 
+                              fontSize: '0.78rem',
+                              backgroundColor: 'var(--danger-light)',
+                              color: 'var(--danger)',
+                              border: '1px solid hsl(0, 75%, 90%)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.25rem',
+                              transition: 'var(--transition)'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--danger)';
+                              e.currentTarget.style.color = '#fff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = 'var(--danger-light)';
+                              e.currentTarget.style.color = 'var(--danger)';
+                            }}
                           >
-                            Delete
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                              <line x1="10" y1="11" x2="10" y2="17"></line>
+                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                            Delete User
                           </button>
                         ) : (
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>Master User</span>
+                          <span style={{ 
+                            fontSize: '0.75rem', 
+                            color: 'var(--success)', 
+                            fontWeight: 700, 
+                            backgroundColor: 'var(--success-light)', 
+                            padding: '0.25rem 0.5rem', 
+                            borderRadius: '4px',
+                            border: '1px solid hsl(145, 45%, 88%)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem'
+                          }}>
+                            🛡️ Master User
+                          </span>
                         )}
                       </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
                       No system users loaded.
                     </td>
                   </tr>
