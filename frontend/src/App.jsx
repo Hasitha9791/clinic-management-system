@@ -246,20 +246,6 @@ export default function App() {
                 {loginLoading ? 'Authenticating...' : 'Sign In'}
               </button>
             </form>
-
-            <details style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-              <summary style={{ cursor: 'pointer', fontSize: '0.82rem', color: 'var(--primary)', fontWeight: 600 }}>
-                💡 View Demo Credentials
-              </summary>
-              <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)', backgroundColor: 'var(--light)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
-                <ul style={{ listStyle: 'none', paddingLeft: 0, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                  <li>🔧 <strong>Admin:</strong> <code>admin</code> / <code>admin123</code></li>
-                  <li>🩺 <strong>Doctor:</strong> <code>doctor</code> / <code>doctor123</code></li>
-                  <li>👤 <strong>Reception:</strong> <code>receptionist</code> / <code>receptionist123</code></li>
-                  <li>💳 <strong>Cashier:</strong> <code>cashier</code> / <code>cashier123</code></li>
-                </ul>
-              </div>
-            </details>
           </div>
         </div>
       </div>
