@@ -20,7 +20,7 @@ function generateId(prefix) {
 }
 
 // WhatsApp Web Client Initialization
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 
 const isProduction = process.env.NODE_ENV === 'production' || process.env.PORT === '7860';
@@ -96,12 +96,15 @@ wwebClient.on('disconnected', (reason) => {
   isWwebReady = false;
   qrText = null;
   console.warn('WhatsApp Web Client was disconnected:', reason);
-  // Attempt to re-initialize
-  try {
-    wwebClient.initialize();
-  } catch (err) {
-    console.error('Failed to re-initialize WhatsApp client:', err.message);
-  }
+  // Attempt to re-initialize after a short delay to allow browser to exit and unlock files
+  setTimeout(() => {
+    try {
+      console.log('Re-initializing WhatsApp Web Client...');
+      wwebClient.initialize();
+    } catch (err) {
+      console.error('Failed to re-initialize WhatsApp client:', err.message);
+    }
+  }, 5000);
 });
 
 // Start the WhatsApp Client in the background
@@ -128,6 +131,101 @@ app.get('/api/whatsapp/qr', (req, res) => {
     res.status(404).json({ error: 'QR Code not available. Device might already be connected.' });
   }
 });
+
+// ── ACCOUNTING NUMBER FORMATTER ─────────────────────────────────────────────
+// Formats a number as Sri Lankan Rupees with comma separators and 2 decimals.
+// Example: 15000 → "Rs. 15,000.00"
+function fmtLKR(amount) {
+  const num = parseFloat(amount) || 0;
+  return 'Rs. ' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ── INVOICE PDF GENERATOR ────────────────────────────────────────────────────
+// Generates a minimal invoice PDF in memory using Puppeteer and returns the
+// base64-encoded content so it can be sent via whatsapp-web.js MessageMedia.
+async function generateInvoicePDF(bill, patient) {
+  const puppeteer = require('puppeteer-core');
+  const execPath = process.env.PUPPETEER_EXECUTABLE_PATH ||
+                   (process.platform === 'linux' ? '/usr/bin/chromium' : undefined);
+
+  const browser = await puppeteer.launch({
+    executablePath: execPath || undefined,
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+
+  try {
+    const page = await browser.newPage();
+
+    // Build item rows
+    const itemRows = (bill.items || []).map((item, i) => `
+      <tr style="background:${i % 2 === 0 ? '#f9fafb' : '#fff'}">
+        <td style="padding:6px 10px">${item.name}</td>
+        <td style="padding:6px 10px;text-align:center">${item.qty}</td>
+        <td style="padding:6px 10px;text-align:right">${fmtLKR(item.price)}</td>
+        <td style="padding:6px 10px;text-align:right;font-weight:600">${fmtLKR((parseFloat(item.price) || 0) * (parseInt(item.qty) || 1))}</td>
+      </tr>`).join('');
+
+    const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1a2e2b; font-size: 13px; }
+  h1 { font-size: 22px; color: #0d9488; margin: 0 0 4px; }
+  .subtitle { color: #6b7280; font-size: 11px; margin-bottom: 20px; }
+  .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+  .meta td { padding: 2px 8px 2px 0; color: #374151; }
+  .meta td:first-child { color: #6b7280; }
+  table.items { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  table.items th { background: #0d9488; color: #fff; padding: 7px 10px; text-align: left; font-size: 12px; }
+  table.items th:nth-child(2) { text-align: center; }
+  table.items th:nth-child(3),table.items th:nth-child(4) { text-align: right; }
+  .total-box { float: right; width: 260px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px 14px; margin-top: 8px; }
+  .total-box .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px; }
+  .total-box .grand { font-size: 15px; font-weight: 700; color: #0d9488; border-top: 2px solid #e5e7eb; padding-top: 6px; margin-top: 4px; }
+  .badge { display:inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+           background: ${bill.payment_status === 'paid' ? '#dcfce7' : '#fee2e2'};
+           color: ${bill.payment_status === 'paid' ? '#16a34a' : '#dc2626'}; }
+  .footer { margin-top: 32px; text-align: center; color: #9ca3af; font-size: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+</style></head><body>
+<div class="header">
+  <div>
+    <h1>Clinic Invoice</h1>
+    <div class="subtitle">Generated on ${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' })}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:20px;font-weight:700;color:#0d9488">${bill.id}</div>
+    <div class="badge">${(bill.payment_status || 'unpaid').toUpperCase()}</div>
+  </div>
+</div>
+<table class="meta"><tbody>
+  <tr><td>Patient:</td><td><strong>${patient ? patient.name : '-'}</strong></td></tr>
+  <tr><td>Contact:</td><td>${patient ? patient.contact : '-'}</td></tr>
+  <tr><td>Date:</td><td>${bill.billing_date}</td></tr>
+  ${bill.visit_id ? `<tr><td>Visit:</td><td>${bill.visit_id}</td></tr>` : ''}
+  ${bill.payment_method && bill.payment_method !== 'none' ? `<tr><td>Payment:</td><td>${bill.payment_method}</td></tr>` : ''}
+</tbody></table>
+<table class="items">
+  <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Amount</th></tr></thead>
+  <tbody>${itemRows}</tbody>
+</table>
+<div class="total-box">
+  <div class="row"><span>Subtotal:</span><span>${fmtLKR(bill.total_amount)}</span></div>
+  ${bill.insurance_amount > 0 ? `<div class="row"><span>Insurance (${bill.insurance_provider}):</span><span>- ${fmtLKR(bill.insurance_amount)}</span></div>` : ''}
+  <div class="row grand"><span>${bill.insurance_amount > 0 ? 'Patient Copay:' : 'Grand Total:'}</span>
+    <span>${fmtLKR(bill.insurance_amount > 0 ? bill.copay_amount : bill.total_amount)}</span></div>
+</div>
+<div style="clear:both"></div>
+<div class="footer">Thank you for choosing our clinic &bull; This is a computer-generated invoice</div>
+</body></html>`;
+
+    await page.setContent(html, { waitUntil: 'networkidle0' });
+    const pdfBuffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '10mm', bottom: '10mm', left: '10mm', right: '10mm' } });
+    return pdfBuffer.toString('base64');
+  } finally {
+    await browser.close();
+  }
+}
 
 // Helper to send real automated WhatsApp messages
 async function sendWhatsAppMessage(toPhone, bodyContent) {
@@ -157,6 +255,36 @@ async function sendWhatsAppMessage(toPhone, bodyContent) {
     return { status: 'sent', sid: msg.id.id };
   } catch (err) {
     console.error(`[WHATSAPP WEB ERROR] Failed to send to ${chatId}:`, err.message);
+    throw err;
+  }
+}
+
+// Helper to send a WhatsApp message with a PDF attachment
+async function sendWhatsAppWithPDF(toPhone, bodyContent, pdfBase64, filename) {
+  if (!toPhone) {
+    console.warn('[WHATSAPP] No recipient number provided. Simulating send.');
+    return { status: 'simulated', sid: null };
+  }
+
+  let formattedTo = toPhone.trim().replace(/[-\s()]/g, '');
+  if (!formattedTo.startsWith('+')) {
+    formattedTo = formattedTo.startsWith('0') ? '94' + formattedTo.substring(1) : '94' + formattedTo;
+  } else {
+    formattedTo = formattedTo.substring(1);
+  }
+  const chatId = `${formattedTo}@c.us`;
+
+  try {
+    // Send text message first
+    await wwebClient.sendMessage(chatId, bodyContent);
+
+    // Then send PDF as a document attachment
+    const media = new MessageMedia('application/pdf', pdfBase64, filename || 'invoice.pdf');
+    const msg = await wwebClient.sendMessage(chatId, media, { sendMediaAsDocument: true });
+    console.log(`[WHATSAPP WEB SENT] Invoice PDF sent to ${chatId}. Message ID: ${msg.id.id}`);
+    return { status: 'sent', sid: msg.id.id };
+  } catch (err) {
+    console.error(`[WHATSAPP WEB ERROR] Failed to send PDF to ${chatId}:`, err.message);
     throw err;
   }
 }
@@ -333,7 +461,7 @@ app.post('/api/appointments', async (req, res) => {
       const patient = await db.getPatientById(patient_id);
       const contactPhone = patient ? patient.contact : '';
       if (contactPhone) {
-        const commMsg = `Dear ${patient.name}, your appointment with ${newAppt.doctor_name} is scheduled on ${appointment_date} (${time_slot}). Your Queue Token is #${savedAppt.token_number}.`;
+        const commMsg = `Dear ${patient.name},\n\nYour appointment has been confirmed:\n\n🏥 *Doctor:* ${newAppt.doctor_name}\n📅 *Date:* ${appointment_date}\n⏰ *Time:* ${time_slot}\n🔢 *Queue Token:* #${savedAppt.token_number}\n\nPlease arrive 10 minutes early. Thank you!`;
         
         let sendStatus = 'Sent';
         try {
@@ -381,7 +509,7 @@ app.put('/api/appointments/:id/status', async (req, res) => {
         const patient = await db.getPatientById(updatedAppt.patient_id);
         const contactPhone = patient ? patient.contact : '';
         if (contactPhone) {
-          const commMsg = `Dear ${patient.name}, you have checked in successfully. Your current token queue number is #${updatedAppt.token_number}. Please wait for your turn.`;
+          const commMsg = `Dear ${patient.name},\n\n✅ *Check-in Confirmed!*\n\nYour queue token number is *#${updatedAppt.token_number}*. Please wait comfortably — we will call your number shortly.\n\nThank you for your patience! 🙏`;
           
           let sendStatus = 'Sent';
           try {
@@ -641,16 +769,51 @@ app.post('/api/billing', async (req, res) => {
       }
     }
 
-    // Trigger WhatsApp invoice billing notification
+    // Trigger WhatsApp invoice billing notification (with PDF attachment)
     try {
       const patient = await db.getPatientById(patient_id);
       const contactPhone = patient ? patient.contact : '';
       if (contactPhone) {
-        const commMsg = `Dear ${patient.name}, invoice ${newBill.id} for Rs. ${newBill.total_amount.toFixed(2)} has been generated. Payment Status: ${newBill.payment_status.toUpperCase()}. Thank you!`;
-        
+        const itemSummary = (newBill.items || []).map(i =>
+          `  • ${i.name} x${i.qty}  —  ${fmtLKR((parseFloat(i.price) || 0) * (parseInt(i.qty) || 1))}`
+        ).join('\n');
+
+        const commMsg =
+`Dear ${patient.name},
+
+🧾 *Invoice Generated*
+
+*Invoice No:* ${newBill.id}
+*Date:* ${newBill.billing_date}
+*Status:* ${newBill.payment_status.toUpperCase()}
+
+*Items:*
+${itemSummary}
+
+━━━━━━━━━━━━━━━━
+${newBill.insurance_amount > 0 ? `Subtotal: ${fmtLKR(newBill.total_amount)}
+Insurance (${newBill.insurance_provider}): - ${fmtLKR(newBill.insurance_amount)}
+*Patient Copay: ${fmtLKR(newBill.copay_amount)}*` : `*Total Amount: ${fmtLKR(newBill.total_amount)}*`}
+${newBill.payment_method && newBill.payment_method !== 'none' ? `Payment: ${newBill.payment_method}` : ''}
+
+Thank you for choosing our clinic! 🏥`;
+
         let sendStatus = 'Sent';
         try {
-          const result = await sendWhatsAppMessage(contactPhone, commMsg);
+          // Try to generate and attach PDF invoice
+          let pdfBase64 = null;
+          try {
+            pdfBase64 = await generateInvoicePDF(newBill, patient);
+          } catch (pdfErr) {
+            console.warn('[INVOICE PDF] Could not generate PDF, sending text only:', pdfErr.message);
+          }
+
+          let result;
+          if (pdfBase64) {
+            result = await sendWhatsAppWithPDF(contactPhone, commMsg, pdfBase64, `Invoice-${newBill.id}.pdf`);
+          } else {
+            result = await sendWhatsAppMessage(contactPhone, commMsg);
+          }
           if (result.status === 'simulated') sendStatus = 'Sent';
         } catch (err) {
           sendStatus = 'Failed';

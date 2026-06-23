@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
+// Accounting number formatter — e.g. 15000 → "Rs. 15,000.00"
+const fmtLKR = (amount) =>
+  'Rs. ' + (parseFloat(amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -174,7 +178,7 @@ export default function Dashboard() {
                     </p>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 700, color: 'var(--dark)' }}>Rs. {bill.total_amount.toFixed(2)}</div>
+                    <div style={{ fontWeight: 700, color: 'var(--dark)' }}>{fmtLKR(bill.total_amount)}</div>
                     <span className={`badge ${bill.payment_status === 'paid' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.75rem', padding: '0.1rem 0.4rem', marginTop: '0.25rem' }}>
                       {bill.payment_status.toUpperCase()}
                     </span>
