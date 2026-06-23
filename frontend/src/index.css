@@ -182,12 +182,15 @@ body {
   justify-content: space-between;
   align-items: center;
   position: sticky;
-  top: 0;
+  top: 1rem;
   z-index: 90;
-  background-color: var(--light);
-  padding: 1.25rem 0 0.85rem 0;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--white), var(--primary-light));
+  padding: 1rem 1.5rem;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
 }
 
 .page-title {
