@@ -443,10 +443,10 @@ export default function App() {
             <div className="current-date">
               📅 {formatDateTime(currentDateTime)}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--white)', border: '1px solid var(--border)', padding: '0.4rem 0.8rem', borderRadius: '20px', fontSize: '0.85rem' }}>
-              <span style={{ fontSize: '1rem' }}>👤</span>
-              <span style={{ fontWeight: 600, color: 'var(--dark)' }}>{user.username}</span>
-              <span className="badge badge-primary" style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', textTransform: 'uppercase' }}>{user.role}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'hsl(145, 45%, 96%)', border: '1px solid hsl(145, 45%, 88%)', padding: '0.35rem 0.75rem', borderRadius: '20px', fontSize: '0.85rem' }}>
+              <span style={{ fontSize: '0.95rem' }}>👤</span>
+              <span style={{ fontWeight: 600, color: 'var(--secondary)' }}>{user.username}</span>
+              <span className="badge badge-primary" style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', textTransform: 'uppercase', backgroundColor: 'var(--secondary)', color: 'var(--white)' }}>{user.role}</span>
             </div>
           </div>
         </header>

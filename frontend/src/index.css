@@ -185,24 +185,25 @@ body {
   top: 0;
   z-index: 90;
   background-color: var(--light);
-  padding: 2.5rem 0 1.5rem 0;
-  margin-bottom: 2rem;
+  padding: 1.25rem 0 0.85rem 0;
+  margin-bottom: 1rem;
   border-bottom: 1px solid var(--border);
 }
 
 .page-title {
-  font-size: 1.75rem;
+  font-size: 1.45rem;
   font-weight: 700;
   color: var(--dark);
 }
 
 .current-date {
-  font-size: 0.9rem;
-  color: var(--text-muted);
-  background-color: var(--white);
-  padding: 0.5rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--primary);
+  background-color: var(--primary-light);
+  padding: 0.45rem 1rem;
   border-radius: 20px;
-  border: 1px solid var(--border);
+  border: 1px solid hsl(172, 40%, 88%);
 }
 
 /* Mobile Navbar (Hamburger Menu) Trigger */
