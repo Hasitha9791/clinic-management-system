@@ -358,6 +358,21 @@ app.put('/api/inventory/:id/stock', async (req, res) => {
   }
 });
 
+app.put('/api/inventory/:id/price', async (req, res) => {
+  try {
+    const { price } = req.body;
+    if (price === undefined || isNaN(price) || parseFloat(price) < 0) {
+      return res.status(400).json({ error: 'Valid positive price value is required' });
+    }
+
+    const updatedItem = await db.updateInventoryPrice(req.params.id, parseFloat(price));
+    res.json(updatedItem);
+  } catch (error) {
+    console.error('Error updating item price:', error);
+    res.status(500).json({ error: 'Failed to update item price' });
+  }
+});
+
 // Get batches for an inventory item
 app.get('/api/inventory/:id/batches', async (req, res) => {
   try {

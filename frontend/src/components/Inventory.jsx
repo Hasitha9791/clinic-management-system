@@ -20,6 +20,7 @@ export default function Inventory() {
   
   // Quick stock edit panel
   const [stockEdit, setStockEdit] = useState({ id: null, change: '' });
+  const [priceEdit, setPriceEdit] = useState({ id: null, price: '' });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
 
@@ -143,6 +144,34 @@ export default function Inventory() {
     } catch (err) {
       console.error('Error updating stock:', err);
       if (window.showToast) window.showToast('Error updating stock.', 'danger');
+    }
+  };
+
+  const handlePriceUpdateSubmit = async (id) => {
+    const priceVal = parseFloat(priceEdit.price);
+    if (isNaN(priceVal) || priceVal < 0) {
+      if (window.showToast) window.showToast('Please enter a valid positive price.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/api/inventory/${id}/price`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ price: priceVal })
+      });
+
+      if (res.ok) {
+        setPriceEdit({ id: null, price: '' });
+        fetchInventory();
+        if (window.showToast) window.showToast('Item selling price updated successfully.', 'success');
+      } else {
+        const errData = await res.json();
+        if (window.showToast) window.showToast(errData.error || 'Failed to update price.', 'danger');
+      }
+    } catch (err) {
+      console.error('Error updating price:', err);
+      if (window.showToast) window.showToast('Error updating price.', 'danger');
     }
   };
 
@@ -397,7 +426,56 @@ export default function Inventory() {
                             <span className="badge badge-warning">Equipment</span>
                           )}
                         </td>
-                        <td>Rs. {item.price.toFixed(2)} / {item.unit.replace(/s$/, '')}</td>
+                        <td>
+                          {priceEdit.id === item.id ? (
+                            <div style={{ display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.85rem' }}>Rs.</span>
+                              <input
+                                type="number"
+                                value={priceEdit.price}
+                                onChange={(e) => setPriceEdit(prev => ({ ...prev, price: e.target.value }))}
+                                className="form-input"
+                                style={{ width: '70px', padding: '0.25rem 0.35rem', margin: 0, fontSize: '0.85rem' }}
+                                step="0.01"
+                                min="0"
+                              />
+                              <button
+                                onClick={() => handlePriceUpdateSubmit(item.id)}
+                                className="btn btn-success"
+                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center' }}
+                                title="Save"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={() => setPriceEdit({ id: null, price: '' })}
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.4rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center' }}
+                                title="Cancel"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <span>Rs. {item.price.toFixed(2)} / {item.unit.replace(/s$/, '')}</span>
+                              <button
+                                onClick={() => setPriceEdit({ id: item.id, price: item.price.toString() })}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                  display: 'inline-flex',
+                                  color: 'var(--primary)',
+                                }}
+                                title="Edit Price"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path></svg>
+                              </button>
+                            </div>
+                          )}
+                        </td>
                         <td>
                           <span className={`badge ${isLow ? 'badge-danger' : 'badge-success'}`} style={{ fontWeight: 700 }}>
                             {item.qty} {item.unit} {isLow && ' (Low)'}

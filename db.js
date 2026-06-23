@@ -781,6 +781,32 @@ const dbHelpers = {
     });
   },
 
+  updateInventoryPrice: (id, price) => {
+    return new Promise((resolve, reject) => {
+      if (dbType === 'supabase') {
+        supabase.from('inventory').update({ price: parseFloat(price) }).eq('id', id).select().single()
+          .then(({ data, error }) => {
+            if (error) reject(error);
+            else resolve(data);
+          });
+      } else {
+        sqliteDb.run(
+          "UPDATE inventory SET price = ? WHERE id = ?",
+          [parseFloat(price), id],
+          function(err) {
+            if (err) reject(err);
+            else {
+              sqliteDb.get("SELECT * FROM inventory WHERE id = ?", [id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+              });
+            }
+          }
+        );
+      }
+    });
+  },
+
   addInventoryItem: (item) => {
     return new Promise((resolve, reject) => {
       if (dbType === 'supabase') {
