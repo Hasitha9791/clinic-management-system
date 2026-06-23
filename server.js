@@ -22,107 +22,106 @@ function generateId(prefix) {
 // WhatsApp Web Client Initialization
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 
-const isProduction = process.env.NODE_ENV === 'production' || process.env.PORT === '7860';
 const puppeteerExecutablePath = process.env.PUPPETEER_EXECUTABLE_PATH || null;
 
-const wwebClient = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: path.join(__dirname, '.wwebjs_auth')
-  }),
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  // Pin a known-working WhatsApp Web version to avoid version mismatch after scan
-  webVersionCache: {
-    type: 'remote',
-    remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.3000.1015901134-alpha.html'
-  },
-  puppeteer: {
-    headless: true,  // Always headless — visible window breaks session on close
-    executablePath: puppeteerExecutablePath || undefined,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-extensions',
-      '--window-size=1280,720'
-    ]
-  }
-});
-
-const QRCode = require('qrcode');
+const PUPPETEER_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-blink-features=AutomationControlled',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--disable-extensions',
+  '--window-size=1280,720'
+];
 
 let isWwebReady = false;
 let qrText = null;
+let wwebClient = null; // mutable — replaced with a fresh instance on each reconnect
 
-wwebClient.on('qr', (qr) => {
-  isWwebReady = false;
-  qrText = qr;
-
-  console.log('\n--- WHATSAPP SCAN REQUIREMENT ---');
-  console.log('Please scan the QR code below using your WhatsApp Linked Devices:');
-  qrcode.generate(qr, { small: true });
-  console.log('----------------------------------\n');
-
-  // Generate PNG files of the QR code for easier scanning
-  const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
-  const qrRootPath = path.join(__dirname, 'qr.png');
-
-  QRCode.toFile(qrPublicPath, qr, { margin: 2, scale: 8 }, (err) => {
-    if (err) console.error('Error generating public/qr.png:', err.message);
-  });
-
-  QRCode.toFile(qrRootPath, qr, { margin: 2, scale: 8 }, (err) => {
-    if (err) console.error('Error generating qr.png:', err.message);
-  });
-});
-
-wwebClient.on('loading_screen', (percent, message) => {
-  console.log(`[WHATSAPP] Loading: ${percent}% — ${message}`);
-});
-
-wwebClient.on('authenticated', () => {
-  console.log('[WHATSAPP] Authenticated successfully! Waiting for ready...');
-});
-
-wwebClient.on('ready', () => {
-  isWwebReady = true;
-  qrText = null;
-  console.log('[WHATSAPP] Client is fully connected and ready!');
-
-  // Clean up physical QR images when connected
-  const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
-  const qrRootPath = path.join(__dirname, 'qr.png');
-  try { if (fs.existsSync(qrPublicPath)) fs.unlinkSync(qrPublicPath); } catch (e) {}
-  try { if (fs.existsSync(qrRootPath)) fs.unlinkSync(qrRootPath); } catch (e) {}
-});
-
-wwebClient.on('auth_failure', (msg) => {
-  isWwebReady = false;
-  console.error('[WHATSAPP] Authentication failure:', msg);
-});
-
-wwebClient.on('disconnected', async (reason) => {
-  isWwebReady = false;
-  qrText = null;
-  console.warn('WhatsApp Web Client was disconnected:', reason);
-  // Delay then fully destroy + re-initialize to avoid Puppeteer binding conflicts
-  setTimeout(async () => {
-    try {
-      console.log('Destroying WhatsApp Web Client before re-init...');
-      await wwebClient.destroy();
-    } catch (e) {
-      console.warn('Destroy warning (safe to ignore):', e.message);
+// ── FACTORY: creates a brand-new Client with all event listeners attached ────
+// A new instance is needed on every reconnect to avoid Puppeteer binding
+// conflicts ("window['onQRChangedEvent'] already exists") and leaked listeners.
+function createWhatsAppClient() {
+  const client = new Client({
+    authStrategy: new LocalAuth({
+      dataPath: path.join(__dirname, '.wwebjs_auth')
+    }),
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    puppeteer: {
+      headless: true,               // Always headless — visible window breaks session on close
+      executablePath: puppeteerExecutablePath || undefined,
+      args: PUPPETEER_ARGS
     }
-    await initWhatsApp();
-  }, 5000);
-});
+  });
 
-// Robust async initializer with retry — prevents process crash on ERR_TIMED_OUT
+  client.on('qr', (qr) => {
+    isWwebReady = false;
+    qrText = qr;
+    console.log('\n--- WHATSAPP SCAN REQUIREMENT ---');
+    console.log('Please scan the QR code below using your WhatsApp Linked Devices:');
+    qrcode.generate(qr, { small: true });
+    console.log('----------------------------------\n');
+
+    const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
+    const qrRootPath   = path.join(__dirname, 'qr.png');
+    QRCode.toFile(qrPublicPath, qr, { margin: 2, scale: 8 }, (err) => {
+      if (err) console.error('Error generating public/qr.png:', err.message);
+    });
+    QRCode.toFile(qrRootPath, qr, { margin: 2, scale: 8 }, (err) => {
+      if (err) console.error('Error generating qr.png:', err.message);
+    });
+  });
+
+  client.on('loading_screen', (percent, message) => {
+    console.log(`[WHATSAPP] Loading: ${percent}% — ${message}`);
+  });
+
+  client.on('authenticated', () => {
+    console.log('[WHATSAPP] Authenticated successfully! Waiting for ready...');
+  });
+
+  client.on('ready', () => {
+    isWwebReady = true;
+    qrText = null;
+    console.log('[WHATSAPP] Client is fully connected and ready!');
+    const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
+    const qrRootPath   = path.join(__dirname, 'qr.png');
+    try { if (fs.existsSync(qrPublicPath)) fs.unlinkSync(qrPublicPath); } catch (e) {}
+    try { if (fs.existsSync(qrRootPath))   fs.unlinkSync(qrRootPath);   } catch (e) {}
+  });
+
+  client.on('auth_failure', (msg) => {
+    isWwebReady = false;
+    console.error('[WHATSAPP] Authentication failure:', msg);
+  });
+
+  client.on('disconnected', async (reason) => {
+    isWwebReady = false;
+    qrText = null;
+    console.warn(`[WHATSAPP] Disconnected: ${reason}`);
+    setTimeout(async () => {
+      try {
+        console.log('[WHATSAPP] Destroying old client instance...');
+        await wwebClient.destroy();
+      } catch (e) {
+        console.warn('[WHATSAPP] Destroy warning (safe):', e.message);
+      }
+      // Replace with a completely fresh instance to avoid Puppeteer binding conflicts
+      console.log('[WHATSAPP] Creating new client instance...');
+      wwebClient = createWhatsAppClient();
+      await initWhatsApp();
+    }, 8000);
+  });
+
+  return client;
+}
+
+// Robust async initializer with retry — never crashes the process
 async function initWhatsApp(attempt = 1) {
   const MAX_ATTEMPTS = 5;
-  const RETRY_DELAY_MS = 30000; // 30 seconds between retries
+  const RETRY_DELAY_MS = 30000;
   try {
     console.log(`[WHATSAPP] Initialization attempt ${attempt}...`);
     await wwebClient.initialize();
@@ -132,12 +131,22 @@ async function initWhatsApp(attempt = 1) {
       console.log(`[WHATSAPP] Retrying in ${RETRY_DELAY_MS / 1000}s...`);
       setTimeout(() => initWhatsApp(attempt + 1), RETRY_DELAY_MS);
     } else {
-      console.error('[WHATSAPP] Max retry attempts reached. WhatsApp messaging will be unavailable.');
+      console.error('[WHATSAPP] Max retry attempts reached. Messaging unavailable until restart.');
     }
   }
 }
 
-// Start the WhatsApp Client in the background (non-blocking, non-crashing)
+// Guard against Puppeteer-internal unhandled errors (e.g. "Execution context destroyed")
+// that can bubble up as uncaught exceptions and crash the process.
+process.on('uncaughtException', (err) => {
+  console.error('[PROCESS] Uncaught exception (non-fatal, keeping server alive):', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[PROCESS] Unhandled rejection (non-fatal):', reason?.message || reason);
+});
+
+// Boot: create fresh client and start
+wwebClient = createWhatsAppClient();
 initWhatsApp();
 
 // WhatsApp Web Status Endpoints
