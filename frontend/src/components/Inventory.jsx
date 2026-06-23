@@ -242,6 +242,9 @@ export default function Inventory() {
 
   const { totalCost, totalSelling, expectedProfit } = calculateStockStats();
 
+  const fmtAmt = (num) =>
+    Number(num).toLocaleString('en-LK', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const handleExportExcel = () => {
     if (filteredInventory.length === 0) {
       if (window.showToast) window.showToast("No inventory records found to export.", "warning");
@@ -348,15 +351,15 @@ export default function Inventory() {
         <div className="stock-stats-grid">
           <div style={{ padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>STOCK ASSET COST</span>
-            <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1.1rem' }}>Rs. {totalCost.toFixed(2)}</span>
+            <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1.1rem' }}>Rs. {fmtAmt(totalCost)}</span>
           </div>
           <div style={{ padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--light)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'block' }}>POTENTIAL REVENUE</span>
-            <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1.1rem' }}>Rs. {totalSelling.toFixed(2)}</span>
+            <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: '1.1rem' }}>Rs. {fmtAmt(totalSelling)}</span>
           </div>
           <div style={{ padding: '0.75rem 1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', backgroundColor: 'var(--success-light)', borderLeft: '3px solid var(--success)' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 600, display: 'block' }}>EXPECTED MARGIN</span>
-            <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: '1.1rem' }}>Rs. {expectedProfit.toFixed(2)}</span>
+            <span style={{ fontWeight: 700, color: 'var(--success)', fontSize: '1.1rem' }}>Rs. {fmtAmt(expectedProfit)}</span>
           </div>
         </div>
 
