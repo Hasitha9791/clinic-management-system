@@ -599,6 +599,41 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// Update user
+app.put('/api/users/:username', async (req, res) => {
+  try {
+    const username = req.params.username;
+    const { password, role, allowed_tabs } = req.body;
+    if (!role || !allowed_tabs || !Array.isArray(allowed_tabs) || allowed_tabs.length === 0) {
+      return res.status(400).json({ error: 'Role and at least one allowed tab are required' });
+    }
+
+    const existingUser = await db.getUser(username);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userData = {
+      role,
+      allowed_tabs
+    };
+
+    if (password && password.trim() !== '') {
+      userData.password = db.hashPassword(password);
+    }
+
+    const updatedUser = await db.updateUser(username, userData);
+    res.json({
+      username: updatedUser.username,
+      role: updatedUser.role,
+      allowed_tabs: updatedUser.allowed_tabs
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update system user' });
+  }
+});
+
 // Delete user
 app.delete('/api/users/:username', async (req, res) => {
   try {

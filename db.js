@@ -429,6 +429,54 @@ const dbHelpers = {
     });
   },
 
+  updateUser: (username, userData) => {
+    const { password, role, allowed_tabs } = userData;
+    const allowedTabsStr = Array.isArray(allowed_tabs) 
+      ? JSON.stringify(allowed_tabs) 
+      : allowed_tabs;
+      
+    return new Promise((resolve, reject) => {
+      if (dbType === 'supabase') {
+        const updates = { role, allowed_tabs: allowedTabsStr };
+        if (password) {
+          updates.password = password;
+        }
+        supabase.from('users').update(updates).eq('username', username).select().single()
+          .then(({ data, error }) => {
+            if (error) reject(error);
+            else {
+              try {
+                data.allowed_tabs = typeof data.allowed_tabs === 'string' ? JSON.parse(data.allowed_tabs) : (data.allowed_tabs || []);
+              } catch(e) {
+                data.allowed_tabs = [];
+              }
+              resolve(data);
+            }
+          });
+      } else {
+        if (password) {
+          sqliteDb.run(
+            "UPDATE users SET password = ?, role = ?, allowed_tabs = ? WHERE username = ?",
+            [password, role, allowedTabsStr, username],
+            function(err) {
+              if (err) reject(err);
+              else resolve({ username, role, allowed_tabs });
+            }
+          );
+        } else {
+          sqliteDb.run(
+            "UPDATE users SET role = ?, allowed_tabs = ? WHERE username = ?",
+            [role, allowedTabsStr, username],
+            function(err) {
+              if (err) reject(err);
+              else resolve({ username, role, allowed_tabs });
+            }
+          );
+        }
+      }
+    });
+  },
+
   // Doctors & Consultants
   getDoctors: () => {
     return new Promise((resolve, reject) => {

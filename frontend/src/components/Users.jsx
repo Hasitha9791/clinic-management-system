@@ -100,6 +100,7 @@ const getTabPillStyle = (tabId) => {
 
 export default function Users() {
   const [users, setUsers] = useState([]);
+  const [isEditingUser, setIsEditingUser] = useState(null);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -172,7 +173,7 @@ export default function Users() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.username || !formData.password) {
+    if (!formData.username || (!isEditingUser && !formData.password)) {
       setMessage({ type: 'danger', text: 'Username and Password are required.' });
       return;
     }
@@ -185,14 +186,22 @@ export default function Users() {
     setMessage({ type: '', text: '' });
 
     try {
-      const res = await fetch(`${API_URL}/api/users`, {
-        method: 'POST',
+      const url = isEditingUser 
+        ? `${API_URL}/api/users/${isEditingUser}`
+        : `${API_URL}/api/users`;
+      
+      const method = isEditingUser ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
 
       if (res.ok) {
-        const successMsg = `System user "${formData.username}" created successfully!`;
+        const successMsg = isEditingUser
+          ? `System user "${formData.username}" updated successfully!`
+          : `System user "${formData.username}" created successfully!`;
         setMessage({ type: 'success', text: successMsg });
         if (window.showToast) window.showToast(successMsg, 'success');
         setFormData({
@@ -201,16 +210,17 @@ export default function Users() {
           role: 'custom',
           allowed_tabs: ['dashboard']
         });
+        setIsEditingUser(null);
         fetchUsers();
       } else {
         const err = await res.json();
-        const errMsg = err.error || 'Failed to create user.';
+        const errMsg = err.error || `Failed to ${isEditingUser ? 'update' : 'create'} user.`;
         setMessage({ type: 'danger', text: errMsg });
         if (window.showToast) window.showToast(errMsg, 'danger');
       }
     } catch (err) {
-      console.error('Error adding user:', err);
-      const errMsg = 'Server error creating user.';
+      console.error(`Error ${isEditingUser ? 'updating' : 'adding'} user:`, err);
+      const errMsg = `Server error ${isEditingUser ? 'updating' : 'creating'} user.`;
       setMessage({ type: 'danger', text: errMsg });
       if (window.showToast) window.showToast(errMsg, 'danger');
     } finally {
@@ -243,6 +253,33 @@ export default function Users() {
       console.error('Error deleting user:', err);
       if (window.showToast) window.showToast('Error deleting user. Please try again.', 'danger');
     }
+  };
+
+  const handleEditUser = (user) => {
+    setIsEditingUser(user.username);
+    setFormData({
+      username: user.username,
+      password: '', // blank by default
+      role: user.role,
+      allowed_tabs: user.allowed_tabs || []
+    });
+    setMessage({ type: '', text: '' });
+    
+    const formCard = document.querySelector('form');
+    if (formCard) {
+      formCard.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingUser(null);
+    setFormData({
+      username: '',
+      password: '',
+      role: 'custom',
+      allowed_tabs: ['dashboard']
+    });
+    setMessage({ type: '', text: '' });
   };
 
   const handleAddDoctor = async (e) => {
@@ -374,54 +411,86 @@ export default function Users() {
                         </div>
                       </td>
                       <td style={{ padding: '0.6rem 0.8rem', textAlign: 'center' }}>
-                        {u.username !== 'admin' ? (
+                        <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
                           <button
-                            onClick={() => handleDeleteUser(u.username)}
+                            onClick={() => handleEditUser(u)}
                             className="btn"
                             style={{ 
                               padding: '0.3rem 0.5rem', 
                               fontSize: '0.75rem',
-                              backgroundColor: 'var(--danger-light)',
-                              color: 'var(--danger)',
-                              border: '1px solid hsl(0, 75%, 90%)',
+                              backgroundColor: 'var(--primary-light)',
+                              color: 'var(--primary)',
+                              border: '1px solid hsl(172, 40%, 88%)',
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '0.2rem',
                               transition: 'var(--transition)'
                             }}
                             onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--danger)';
+                              e.currentTarget.style.backgroundColor = 'var(--primary)';
                               e.currentTarget.style.color = '#fff';
                             }}
                             onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = 'var(--danger-light)';
-                              e.currentTarget.style.color = 'var(--danger)';
+                              e.currentTarget.style.backgroundColor = 'var(--primary-light)';
+                              e.currentTarget.style.color = 'var(--primary)';
                             }}
                           >
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"></polyline>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                              <line x1="10" y1="11" x2="10" y2="17"></line>
-                              <line x1="14" y1="11" x2="14" y2="17"></line>
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
-                            Delete
+                            Edit
                           </button>
-                        ) : (
-                          <span style={{ 
-                            fontSize: '0.72rem', 
-                            color: 'var(--success)', 
-                            fontWeight: 700, 
-                            backgroundColor: 'var(--success-light)', 
-                            padding: '0.2rem 0.45rem', 
-                            borderRadius: '4px',
-                            border: '1px solid hsl(145, 45%, 88%)',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.2rem'
-                          }}>
-                            🛡️ Master
-                          </span>
-                        )}
+
+                          {u.username !== 'admin' ? (
+                            <button
+                              onClick={() => handleDeleteUser(u.username)}
+                              className="btn"
+                              style={{ 
+                                padding: '0.3rem 0.5rem', 
+                                fontSize: '0.75rem',
+                                backgroundColor: 'var(--danger-light)',
+                                color: 'var(--danger)',
+                                border: '1px solid hsl(0, 75%, 90%)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.2rem',
+                                transition: 'var(--transition)'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--danger)';
+                                e.currentTarget.style.color = '#fff';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--danger-light)';
+                                e.currentTarget.style.color = 'var(--danger)';
+                              }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                              </svg>
+                              Delete
+                            </button>
+                          ) : (
+                            <span style={{ 
+                              fontSize: '0.72rem', 
+                              color: 'var(--success)', 
+                              fontWeight: 700, 
+                              backgroundColor: 'var(--success-light)', 
+                              padding: '0.2rem 0.45rem', 
+                              borderRadius: '4px',
+                              border: '1px solid hsl(145, 45%, 88%)',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem'
+                            }}>
+                              🛡️ Master
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -497,9 +566,11 @@ export default function Users() {
 
       {/* Right Column: Admin Forms (Occupies 1fr) */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {/* Create User Form */}
+        {/* Create/Edit User Form */}
         <div className="card" style={{ padding: '1.25rem' }}>
-          <h3 className="card-title" style={{ marginBottom: '1rem' }}>Add System User & Set Access</h3>
+          <h3 className="card-title" style={{ marginBottom: '1rem' }}>
+            {isEditingUser ? `✏️ Edit User: ${isEditingUser}` : '👥 Add System User & Set Access'}
+          </h3>
           
           {message.text && (
             <div className={`badge badge-${message.type}`} style={{ width: '100%', padding: '0.75rem', marginBottom: '1.25rem', borderRadius: 'var(--radius-sm)' }}>
@@ -517,20 +588,23 @@ export default function Users() {
                 onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value.toLowerCase().trim() }))}
                 className="form-input"
                 required
+                disabled={isEditingUser !== null}
               />
             </div>
 
             <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label className="form-label">Password *</label>
+              <label className="form-label">
+                {isEditingUser ? 'New Password (Leave blank to keep current)' : 'Password *'}
+              </label>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                 <input
                   type={showUserPassword ? "text" : "password"}
-                  placeholder="••••••••"
+                  placeholder={isEditingUser ? "•••••••• (unchanged)" : "••••••••"}
                   value={formData.password}
                   onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                   className="form-input"
                   style={{ paddingRight: '2.75rem' }}
-                  required
+                  required={!isEditingUser}
                 />
                 <button
                   type="button"
@@ -603,9 +677,29 @@ export default function Users() {
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1.5rem' }} disabled={loading}>
-              {loading ? 'Creating...' : 'Create System User'}
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem' }}>
+              {isEditingUser && (
+                <button 
+                  type="button" 
+                  onClick={handleCancelEdit} 
+                  className="btn btn-secondary" 
+                  style={{ flex: 1 }}
+                >
+                  Cancel
+                </button>
+              )}
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                style={{ flex: 2 }} 
+                disabled={loading}
+              >
+                {loading 
+                  ? (isEditingUser ? 'Saving...' : 'Creating...') 
+                  : (isEditingUser ? 'Save Changes' : 'Create System User')
+                }
+              </button>
+            </div>
           </form>
         </div>
 
