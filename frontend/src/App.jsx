@@ -411,13 +411,6 @@ export default function App() {
 
         {/* User profile & Logout */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '1.2rem' }}>👤</span>
-            <div>
-              <p style={{ color: '#fff', fontWeight: 600, fontSize: '0.9rem', lineHeight: '1.2' }}>{user.username.toUpperCase()}</p>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'capitalize' }}>Role: {user.role}</p>
-            </div>
-          </div>
           <button 
             onClick={handleLogout} 
             className="btn btn-danger" 
