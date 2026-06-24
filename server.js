@@ -594,7 +594,7 @@ app.get('/api/visits', async (req, res) => {
 
 app.post('/api/visits', async (req, res) => {
   try {
-    const { patient_id, symptoms, diagnosis, treatment, doctor_notes, bp, pulse, temp, weight, spo2 } = req.body;
+    const { patient_id, symptoms, diagnosis, treatment, doctor_notes, bp, pulse, temp, weight, spo2, next_clinic_date } = req.body;
     if (!patient_id) {
       return res.status(400).json({ error: 'patient_id is required' });
     }
@@ -611,7 +611,8 @@ app.post('/api/visits', async (req, res) => {
       pulse: pulse ? parseInt(pulse) : null,
       temp: temp ? parseFloat(temp) : null,
       weight: weight ? parseFloat(weight) : null,
-      spo2: spo2 ? parseInt(spo2) : null
+      spo2: spo2 ? parseInt(spo2) : null,
+      next_clinic_date: next_clinic_date || null
     };
 
     const savedVisit = await db.createVisit(newVisit);
@@ -619,6 +620,47 @@ app.post('/api/visits', async (req, res) => {
   } catch (error) {
     console.error('Error creating visit:', error);
     res.status(500).json({ error: 'Failed to record visit/diagnosis' });
+  }
+});
+
+// GET /api/follow-ups — returns all visits with a next_clinic_date, joined with patient info
+app.get('/api/follow-ups', async (req, res) => {
+  try {
+    const { from } = req.query;
+    const { dbType, supabase, sqliteDb } = db._internal ? db._internal : {};
+    
+    // Access internal db helper for a custom join query
+    if (db.getFollowUps) {
+      const followUps = await db.getFollowUps(from || null);
+      return res.json(followUps);
+    }
+    
+    // Inline fallback: use existing helpers and join in memory
+    const visits = await db.getVisits();
+    const patients = await db.getPatients();
+    const patientMap = {};
+    patients.forEach(p => { patientMap[p.id] = p; });
+    
+    const followUps = visits
+      .filter(v => v.next_clinic_date && v.next_clinic_date.trim() !== '')
+      .map(v => ({
+        ...v,
+        patient_name: patientMap[v.patient_id]?.name || 'Unknown',
+        patient_contact: patientMap[v.patient_id]?.contact || '',
+        patient_age: patientMap[v.patient_id]?.age || null,
+        patient_gender: patientMap[v.patient_id]?.gender || ''
+      }))
+      .sort((a, b) => new Date(a.next_clinic_date) - new Date(b.next_clinic_date));
+    
+    // Apply from-date filter if provided
+    const filtered = from
+      ? followUps.filter(v => v.next_clinic_date >= from)
+      : followUps;
+    
+    res.json(filtered);
+  } catch (error) {
+    console.error('Error fetching follow-ups:', error);
+    res.status(500).json({ error: 'Failed to fetch follow-up schedule' });
   }
 });
 

@@ -30,6 +30,19 @@ function hashPassword(password) {
   return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+// Always open local SQLite database as mirror/fallback support
+if (sqlite3) {
+  const dbPath = path.join(__dirname, 'clinic.db');
+  sqliteDb = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Error opening SQLite database:', err.message);
+    } else {
+      console.log('Connected to local SQLite database (mirror/fallback).');
+      initSQLiteSchema();
+    }
+  });
+}
+
 if (supabaseUrl && supabaseKey) {
   const options = {};
   if (ws) {
@@ -44,15 +57,7 @@ if (supabaseUrl && supabaseKey) {
     process.exit(1);
   }
   console.log('No Supabase credentials found. Falling back to local SQLite database.');
-  const dbPath = path.join(__dirname, 'clinic.db');
-  sqliteDb = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-      console.error('Error opening SQLite database:', err.message);
-    } else {
-      console.log('Connected to local SQLite database.');
-      initSQLiteSchema();
-    }
-  });
+  dbType = 'sqlite';
 }
 
 function initSQLiteSchema() {
@@ -70,21 +75,25 @@ function initSQLiteSchema() {
     // Run migration check for allowed_tabs column on users
     sqliteDb.run("ALTER TABLE users ADD COLUMN allowed_tabs TEXT", (err) => {});
 
-    // Migration to add clinic-profile to existing admin users
+    // Migration to add clinic-profile and drug-templates to existing admin and doctor users
     sqliteDb.run(`
       UPDATE users 
-      SET allowed_tabs = '["dashboard","onboarding","appointments","consultations","billing","inventory","communications","users","clinic-profile"]' 
-      WHERE role = 'admin' AND allowed_tabs NOT LIKE '%clinic-profile%'
-    `, (err) => {
-      if (err) console.warn("Failed to run admin permissions migration:", err.message);
-    });
+      SET allowed_tabs = '["dashboard","onboarding","appointments","consultations","billing","inventory","drug-templates","communications","users","clinic-profile"]' 
+      WHERE role = 'admin' AND (allowed_tabs IS NULL OR allowed_tabs NOT LIKE '%clinic-profile%' OR allowed_tabs NOT LIKE '%drug-templates%')
+    `, (err) => {});
+
+    sqliteDb.run(`
+      UPDATE users 
+      SET allowed_tabs = '["dashboard","onboarding","consultations","drug-templates","communications"]' 
+      WHERE role = 'doctor' AND (allowed_tabs IS NULL OR allowed_tabs NOT LIKE '%drug-templates%')
+    `, (err) => {});
 
     // Seed default users if empty
     sqliteDb.get("SELECT COUNT(*) as count FROM users", [], (err, row) => {
       if (!err && row.count === 0) {
         const defaultUsers = [
-          ['admin', hashPassword('admin123'), 'admin', JSON.stringify(["dashboard", "onboarding", "appointments", "consultations", "billing", "inventory", "communications", "users", "clinic-profile"])],
-          ['doctor', hashPassword('doctor123'), 'doctor', JSON.stringify(["dashboard", "onboarding", "consultations", "communications"])],
+          ['admin', hashPassword('admin123'), 'admin', JSON.stringify(["dashboard", "onboarding", "appointments", "consultations", "billing", "inventory", "drug-templates", "communications", "users", "clinic-profile"])],
+          ['doctor', hashPassword('doctor123'), 'doctor', JSON.stringify(["dashboard", "onboarding", "consultations", "drug-templates", "communications"])],
           ['receptionist', hashPassword('receptionist123'), 'receptionist', JSON.stringify(["dashboard", "onboarding", "appointments", "communications"])],
           ['cashier', hashPassword('cashier123'), 'cashier', JSON.stringify(["dashboard", "billing", "inventory", "communications"])]
         ];
@@ -134,6 +143,8 @@ function initSQLiteSchema() {
     sqliteDb.run("ALTER TABLE visits ADD COLUMN temp REAL", (err) => {});
     sqliteDb.run("ALTER TABLE visits ADD COLUMN weight REAL", (err) => {});
     sqliteDb.run("ALTER TABLE visits ADD COLUMN spo2 INTEGER", (err) => {});
+    // Migration to add next_clinic_date (follow-up scheduling)
+    sqliteDb.run("ALTER TABLE visits ADD COLUMN next_clinic_date TEXT", (err) => {});
 
     // Appointments table
     sqliteDb.run(`
@@ -317,6 +328,12 @@ const dbHelpers = {
               if (data.role === 'admin' && !data.allowed_tabs.includes('clinic-profile')) {
                 data.allowed_tabs.push('clinic-profile');
               }
+              if (data.role === 'admin' && !data.allowed_tabs.includes('drug-templates')) {
+                data.allowed_tabs.push('drug-templates');
+              }
+              if (data.role === 'doctor' && !data.allowed_tabs.includes('drug-templates')) {
+                data.allowed_tabs.push('drug-templates');
+              }
               resolve(data);
             }
           });
@@ -332,6 +349,12 @@ const dbHelpers = {
             }
             if (row.role === 'admin' && !allowed_tabs.includes('clinic-profile')) {
               allowed_tabs.push('clinic-profile');
+            }
+            if (row.role === 'admin' && !allowed_tabs.includes('drug-templates')) {
+              allowed_tabs.push('drug-templates');
+            }
+            if (row.role === 'doctor' && !allowed_tabs.includes('drug-templates')) {
+              allowed_tabs.push('drug-templates');
             }
             resolve({
               ...row,
@@ -362,6 +385,12 @@ const dbHelpers = {
                 if (u.role === 'admin' && !tabs.includes('clinic-profile')) {
                   tabs.push('clinic-profile');
                 }
+                if (u.role === 'admin' && !tabs.includes('drug-templates')) {
+                  tabs.push('drug-templates');
+                }
+                if (u.role === 'doctor' && !tabs.includes('drug-templates')) {
+                  tabs.push('drug-templates');
+                }
                 return { ...u, allowed_tabs: tabs };
               });
               resolve(parsed);
@@ -380,6 +409,12 @@ const dbHelpers = {
               }
               if (r.role === 'admin' && !allowed_tabs.includes('clinic-profile')) {
                 allowed_tabs.push('clinic-profile');
+              }
+              if (r.role === 'admin' && !allowed_tabs.includes('drug-templates')) {
+                allowed_tabs.push('drug-templates');
+              }
+              if (r.role === 'doctor' && !allowed_tabs.includes('drug-templates')) {
+                allowed_tabs.push('drug-templates');
               }
               return {
                 ...r,
@@ -646,14 +681,31 @@ const dbHelpers = {
       if (dbType === 'supabase') {
         supabase.from('visits').insert([visit]).select().single()
           .then(({ data, error }) => {
-            if (error) reject(error);
-            else resolve(data);
+            if (error) {
+              if (error.code === 'PGRST204' && visit.hasOwnProperty('next_clinic_date')) {
+                console.warn("WARNING: next_clinic_date column does not exist in Supabase. Attempting insert without it.");
+                const fallbackVisit = { ...visit };
+                delete fallbackVisit.next_clinic_date;
+                supabase.from('visits').insert([fallbackVisit]).select().single()
+                  .then(({ data: fbData, error: fbError }) => {
+                    if (fbError) reject(fbError);
+                    else {
+                      fbData.schema_drift_warning = "next_clinic_date column is missing in Supabase. Visit saved, but follow-up date was not stored. Please run SQL migration: ALTER TABLE visits ADD COLUMN next_clinic_date TEXT;";
+                      resolve(fbData);
+                    }
+                  });
+              } else {
+                reject(error);
+              }
+            } else {
+              resolve(data);
+            }
           });
       } else {
-        const { id, patient_id, visit_date, symptoms, diagnosis, treatment, doctor_notes, bp, pulse, temp, weight, spo2 } = visit;
+        const { id, patient_id, visit_date, symptoms, diagnosis, treatment, doctor_notes, bp, pulse, temp, weight, spo2, next_clinic_date } = visit;
         sqliteDb.run(
-          "INSERT INTO visits (id, patient_id, visit_date, symptoms, diagnosis, treatment, doctor_notes, bp, pulse, temp, weight, spo2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-          [id, patient_id, visit_date, symptoms, diagnosis, treatment, doctor_notes, bp || null, pulse || null, temp || null, weight || null, spo2 || null],
+          "INSERT INTO visits (id, patient_id, visit_date, symptoms, diagnosis, treatment, doctor_notes, bp, pulse, temp, weight, spo2, next_clinic_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          [id, patient_id, visit_date, symptoms, diagnosis, treatment, doctor_notes, bp || null, pulse || null, temp || null, weight || null, spo2 || null, next_clinic_date || null],
           function(err) {
             if (err) reject(err);
             else resolve(visit);

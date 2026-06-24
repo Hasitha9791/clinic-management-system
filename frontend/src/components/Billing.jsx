@@ -960,28 +960,70 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                           {item.type === 'equipment' && <span className="badge badge-warning" style={{ marginLeft: '0.5rem', fontSize: '0.7rem', padding: '0.1rem 0.4rem' }}>Supply</span>}
                         </td>
                         <td>
-                          {item.id === 'custom_consult' ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                              <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Rs.</span>
-                              <input
-                                type="number"
-                                value={item.price}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  const newPrice = isNaN(val) ? 0.0 : val;
-                                  setCart(prev => prev.map((c, i) => i === index ? { ...c, price: newPrice } : c));
-                                }}
-                                className="form-input"
-                                style={{ width: '90px', padding: '0.2rem 0.4rem', margin: 0, fontSize: '0.9rem', textAlign: 'right' }}
-                                min="0"
-                                step="50"
-                              />
-                            </div>
-                          ) : (
-                            `Rs. ${fmtAmt(item.price)}`
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Rs.</span>
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                const newPrice = isNaN(val) ? 0.0 : val;
+                                setCart(prev => prev.map((c, i) => i === index ? { ...c, price: newPrice } : c));
+                              }}
+                              className="form-input"
+                              style={{ width: '100px', padding: '0.2rem 0.4rem', margin: 0, fontSize: '0.9rem', textAlign: 'right' }}
+                              min="0"
+                              step="any"
+                            />
+                          </div>
                         </td>
-                        <td>{item.qty}</td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}>
+                            <input
+                              type="number"
+                              value={item.qty}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value);
+                                const newQty = isNaN(val) ? 1 : val;
+                                setCart(prev => prev.map((c, i) => i === index ? { ...c, qty: newQty < 1 ? 1 : newQty } : c));
+                              }}
+                              className="form-input"
+                              style={{ 
+                                width: '75px', 
+                                padding: '0.2rem 0.4rem', 
+                                margin: 0, 
+                                fontSize: '0.9rem', 
+                                textAlign: 'center',
+                                borderColor: (() => {
+                                  if (item.id && item.id.startsWith('inv_')) {
+                                    const invItem = inventory.find(i => i.id === item.id);
+                                    if (invItem && item.qty > invItem.qty) return 'var(--danger)';
+                                  }
+                                  return 'var(--border)';
+                                })()
+                              }}
+                              min="1"
+                            />
+                            {(() => {
+                              if (item.id && item.id.startsWith('inv_')) {
+                                const invItem = inventory.find(i => i.id === item.id);
+                                if (invItem) {
+                                  const isLow = item.qty > invItem.qty;
+                                  return (
+                                    <span style={{ 
+                                      fontSize: '0.7rem', 
+                                      color: isLow ? 'var(--danger)' : 'var(--text-muted)',
+                                      fontWeight: isLow ? 600 : 'normal'
+                                    }}>
+                                      Stock: {invItem.qty}
+                                    </span>
+                                  );
+                                }
+                              }
+                              return null;
+                            })()}
+                          </div>
+                        </td>
                         <td style={{ fontWeight: 600 }}>Rs. {fmtAmt(item.qty * item.price)}</td>
                         <td>
                           <button onClick={() => handleRemoveFromCart(index)} className="btn btn-danger" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>

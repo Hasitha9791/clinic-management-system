@@ -15,7 +15,8 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
     pulse: '',
     temp: '',
     weight: '',
-    spo2: ''
+    spo2: '',
+    next_clinic_date: ''
   });
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
@@ -86,7 +87,14 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
         const savedVisit = await res.json();
         const successMsg = 'Consultation recorded successfully!';
         setMessage({ type: 'success', text: successMsg });
-        if (window.showToast) window.showToast(successMsg, 'success');
+        if (window.showToast) {
+          window.showToast(successMsg, 'success');
+          if (savedVisit.schema_drift_warning) {
+            setTimeout(() => {
+              window.showToast(savedVisit.schema_drift_warning, 'warning');
+            }, 1000);
+          }
+        }
         setFormData({
           symptoms: '',
           diagnosis: '',
@@ -96,7 +104,8 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
           pulse: '',
           temp: '',
           weight: '',
-          spo2: ''
+          spo2: '',
+          next_clinic_date: ''
         });
         fetchVisitHistory(selectedPatient.id);
         
@@ -281,6 +290,28 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
                 />
               </div>
 
+              {/* Next Clinic Date (Follow-Up) */}
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem', marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                  Next Clinic Date (Follow-Up)
+                </label>
+                <input
+                  type="date"
+                  name="next_clinic_date"
+                  value={formData.next_clinic_date}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  min={new Date().toISOString().split('T')[0]}
+                  style={{ maxWidth: '220px' }}
+                />
+                {formData.next_clinic_date && (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--primary)', marginTop: '0.3rem' }}>
+                    📅 Follow-up scheduled for {new Date(formData.next_clinic_date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  </p>
+                )}
+              </div>
+
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
                 {loading ? 'Saving...' : 'Record Visit & Diagnosis'}
               </button>
@@ -352,7 +383,14 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
               <div style={{ maxHeight: '650px', overflowY: 'auto', paddingRight: '0.5rem' }}>
                 {visits.map((visit) => (
                   <div key={visit.id} className="history-item">
-                    <span className="history-date">{visit.visit_date} (ID: {visit.id})</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.3rem' }}>
+                      <span className="history-date">{visit.visit_date} (ID: {visit.id})</span>
+                      {visit.next_clinic_date && (
+                        <span style={{ fontSize: '0.72rem', backgroundColor: 'var(--primary)', color: '#fff', padding: '0.2rem 0.5rem', borderRadius: '50px', whiteSpace: 'nowrap' }}>
+                          📅 Follow-up: {new Date(visit.next_clinic_date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
                     <h4 className="history-diag">Diagnosis: {visit.diagnosis || 'None'}</h4>
                     
                     {/* Vitals values display */}

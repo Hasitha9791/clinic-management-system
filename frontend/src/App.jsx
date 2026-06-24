@@ -9,6 +9,7 @@ import Communications from './components/Communications';
 import Users from './components/Users';
 import ClinicProfile from './components/ClinicProfile';
 import DrugTemplates from './components/DrugTemplates';
+import FollowUp from './components/FollowUp';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
@@ -93,8 +94,8 @@ export default function App() {
   useEffect(() => {
     if (user) {
       const allowed = Array.isArray(user.allowed_tabs) ? user.allowed_tabs : (
-        user.role === 'admin' ? ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile', 'drug-templates'] : (
-          user.role === 'doctor' ? ['dashboard', 'onboarding', 'consultations', 'communications', 'drug-templates'] : (
+        user.role === 'admin' ? ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile', 'drug-templates', 'follow-ups'] : (
+          user.role === 'doctor' ? ['dashboard', 'onboarding', 'consultations', 'communications', 'drug-templates', 'follow-ups'] : (
             user.role === 'receptionist' ? ['dashboard', 'onboarding', 'appointments', 'communications'] : (
               user.role === 'cashier' ? ['dashboard', 'billing', 'inventory', 'communications'] : ['dashboard']
             )
@@ -192,8 +193,13 @@ export default function App() {
   const isTabAllowed = (tabName) => {
     if (!user) return false;
     
-    // Admins always have access to clinic-profile and users settings tabs
-    if (user.role === 'admin' && (tabName === 'clinic-profile' || tabName === 'users')) {
+    // Admins always have access to clinic-profile, users, and drug-templates settings tabs
+    if (user.role === 'admin' && (tabName === 'clinic-profile' || tabName === 'users' || tabName === 'drug-templates' || tabName === 'follow-ups')) {
+      return true;
+    }
+    
+    // Doctors always have access to drug-templates and follow-ups tab
+    if (user.role === 'doctor' && (tabName === 'drug-templates' || tabName === 'follow-ups')) {
       return true;
     }
     
@@ -413,6 +419,17 @@ export default function App() {
                 </button>
               </li>
             )}
+            {isTabAllowed('follow-ups') && (
+              <li className="nav-item">
+                <button 
+                  onClick={() => selectTab('follow-ups')} 
+                  className={`nav-button ${activeTab === 'follow-ups' ? 'active' : ''}`}
+                >
+                  <svg className="nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line><polyline points="9 14 11 16 15 12"></polyline></svg>
+                  Follow-Up Schedule
+                </button>
+              </li>
+            )}
             {isTabAllowed('billing') && (
               <li className="nav-item">
                 <button 
@@ -528,6 +545,7 @@ export default function App() {
               {activeTab === 'users' && 'Users & Permissions'}
               {activeTab === 'clinic-profile' && 'Clinic Profile Settings'}
               {activeTab === 'drug-templates' && 'Drug Templates / Diagnosis Presets'}
+              {activeTab === 'follow-ups' && 'Follow-Up Schedule'}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -563,6 +581,12 @@ export default function App() {
             selectedPatient={selectedPatient} 
             onSelectPatient={setSelectedPatient} 
             onGoToBilling={handleGoToBilling} 
+          />
+        )}
+
+        {activeTab === 'follow-ups' && (
+          <FollowUp
+            onGoToConsultation={handlePatientSelect}
           />
         )}
         
