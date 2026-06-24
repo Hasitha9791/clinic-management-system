@@ -60,9 +60,13 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   const [payNowMethod, setPayNowMethod] = useState('cash');
   const [payNowLoading, setPayNowLoading] = useState(false);
 
+  const [drugTemplates, setDrugTemplates] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+
   useEffect(() => {
     fetchInventory();
     fetchBillingHistory();
+    fetchDrugTemplates();
     if (!selectedPatient) {
       fetchPatients();
     } else {
@@ -108,6 +112,18 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
       }
     } catch (err) {
       console.error('Error fetching billing history:', err);
+    }
+  };
+
+  const fetchDrugTemplates = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/drug-templates`);
+      if (res.ok) {
+        const data = await res.json();
+        setDrugTemplates(data);
+      }
+    } catch (err) {
+      console.error('Error fetching drug templates:', err);
     }
   };
 
@@ -203,6 +219,100 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
         barcodeInputRef.current.focus();
       }
     }, 50);
+  };
+
+  const handleLoadTemplate = (templateId) => {
+    if (!templateId) return;
+    
+    const tpl = drugTemplates.find(t => t.id === templateId);
+    if (!tpl) return;
+
+    const newItems = [];
+    let lowStockWarnings = [];
+
+    tpl.items.forEach(item => {
+      // If it is a stock item
+      if (item.id && item.id.startsWith('inv_')) {
+        const invItem = inventory.find(i => i.id === item.id);
+        if (invItem) {
+          // Check stock level
+          if (invItem.qty <= 0) {
+            lowStockWarnings.push(`⚠️ ${invItem.name} is completely out of stock!`);
+          } else if (invItem.qty < item.qty) {
+            lowStockWarnings.push(`⚠️ Insufficient stock for ${invItem.name} (Preset: ${item.qty}, Available: ${invItem.qty})`);
+          }
+
+          newItems.push({
+            id: invItem.id,
+            name: invItem.name,
+            qty: item.qty,
+            price: invItem.price, // use current inventory price
+            type: invItem.type,
+            barcode: invItem.barcode || ''
+          });
+        } else {
+          // Inventory item no longer exists in stock list, load it as custom
+          newItems.push({
+            id: 'custom_' + Math.random().toString(36).substr(2, 9),
+            name: item.name,
+            qty: item.qty,
+            price: item.price,
+            type: 'drug'
+          });
+        }
+      } else {
+        // Custom / Service item
+        newItems.push({
+          id: 'custom_' + Math.random().toString(36).substr(2, 9),
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+          type: item.type || 'service'
+        });
+      }
+    });
+
+    if (newItems.length === 0) {
+      if (window.showToast) window.showToast('Template has no valid items.', 'warning');
+      return;
+    }
+
+    // Merge newItems into cart:
+    // If item already exists in cart, increment quantity. Otherwise, add new item.
+    setCart(prev => {
+      const updated = [...prev];
+      newItems.forEach(newItem => {
+        // Check if item is already in cart
+        const isCustom = newItem.id.startsWith('custom_');
+        const existingIdx = updated.findIndex(c => {
+          if (isCustom) {
+            // For custom items, match by name and price to merge them
+            return c.id.startsWith('custom_') && c.name === newItem.name && c.price === newItem.price;
+          } else {
+            return c.id === newItem.id;
+          }
+        });
+
+        if (existingIdx > -1) {
+          updated[existingIdx].qty += newItem.qty;
+        } else {
+          updated.push(newItem);
+        }
+      });
+      return updated;
+    });
+
+    if (window.showToast) {
+      window.showToast(`Loaded template "${tpl.name}" (${newItems.length} items added).`, 'success');
+      if (lowStockWarnings.length > 0) {
+        lowStockWarnings.forEach(warn => {
+          window.showToast(warn, 'warning');
+        });
+      }
+    }
+
+    // Reset template selector
+    setSelectedTemplateId('');
   };
 
   const handleAddItemToCart = () => {
@@ -636,6 +746,75 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                 Change Patient
               </button>
             </div>
+
+            {/* Diagnosis / Drug Template Selector */}
+            <div style={{
+              backgroundColor: 'rgba(13, 148, 136, 0.05)',
+              border: '1px solid var(--border)',
+              padding: '1rem',
+              borderRadius: 'var(--radius)',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '1rem',
+              flexWrap: 'wrap'
+            }}>
+              <div>
+                <label className="form-label" style={{ margin: 0, fontWeight: 600 }}>Diagnosis-Based Drug Template</label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>Select a diagnosis to auto-populate the bill with preset drugs.</p>
+              </div>
+              <div style={{ flex: '1 1 250px', display: 'flex', gap: '0.5rem' }}>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => {
+                    setSelectedTemplateId(e.target.value);
+                    handleLoadTemplate(e.target.value);
+                  }}
+                  className="form-select"
+                  style={{ margin: 0 }}
+                >
+                  <option value="">-- Select Diagnosis / Template --</option>
+                  {drugTemplates.map(tpl => (
+                    <option key={tpl.id} value={tpl.id}>{tpl.name} ({tpl.items?.length || 0} items)</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Smart Auto-Diagnosis Matching Alert */}
+            {selectedVisit && selectedVisit.diagnosis && (
+              (() => {
+                const diag = selectedVisit.diagnosis.toLowerCase().trim();
+                const matchedTpl = drugTemplates.find(t => t.name.toLowerCase().trim() === diag);
+                if (matchedTpl) {
+                  return (
+                    <div style={{
+                      backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                      border: '1px solid rgba(234, 179, 8, 0.3)',
+                      color: 'var(--dark)',
+                      padding: '0.75rem 1rem',
+                      borderRadius: 'var(--radius-sm)',
+                      marginBottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: '0.85rem'
+                    }}>
+                      <span>💡 Visit diagnosis matches template: <strong>{matchedTpl.name}</strong></span>
+                      <button 
+                        onClick={() => handleLoadTemplate(matchedTpl.id)} 
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderColor: 'rgba(234, 179, 8, 0.5)', background: 'transparent' }}
+                      >
+                        ⚡ Load Preset Items
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()
+            )}
 
             {/* Barcode Scanner Input Zone */}
             <div style={{

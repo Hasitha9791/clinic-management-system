@@ -1087,6 +1087,87 @@ app.delete('/api/doctors/:id', async (req, res) => {
   }
 });
 
+// ==========================================
+// DRUG TEMPLATE ENDPOINTS
+// ==========================================
+
+// Get all drug templates
+app.get('/api/drug-templates', async (req, res) => {
+  try {
+    const templates = await db.getDrugTemplates();
+    res.json(templates);
+  } catch (error) {
+    console.error('Error fetching drug templates:', error);
+    res.status(500).json({ error: 'Failed to fetch drug templates' });
+  }
+});
+
+// Get a single drug template
+app.get('/api/drug-templates/:id', async (req, res) => {
+  try {
+    const template = await db.getDrugTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: 'Drug template not found' });
+    }
+    res.json(template);
+  } catch (error) {
+    console.error('Error fetching drug template:', error);
+    res.status(500).json({ error: 'Failed to fetch drug template' });
+  }
+});
+
+// Create a drug template
+app.post('/api/drug-templates', async (req, res) => {
+  try {
+    const { name, description, items } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Template/Diagnosis name is required' });
+    }
+
+    const newTemplate = {
+      id: generateId('TPL'),
+      name,
+      description: description || '',
+      items: items || [],
+      created_at: new Date().toISOString()
+    };
+
+    const savedTemplate = await db.createDrugTemplate(newTemplate);
+    res.status(201).json(savedTemplate);
+  } catch (error) {
+    console.error('Error creating drug template:', error);
+    res.status(500).json({ error: 'Failed to create drug template' });
+  }
+});
+
+// Update a drug template
+app.put('/api/drug-templates/:id', async (req, res) => {
+  try {
+    const { name, description, items } = req.body;
+    if (!name) {
+      return res.status(400).json({ error: 'Template/Diagnosis name is required' });
+    }
+
+    const updated = await db.updateDrugTemplate(req.params.id, { name, description, items });
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating drug template:', error);
+    res.status(500).json({ error: 'Failed to update drug template' });
+  }
+});
+
+// Delete a drug template
+app.delete('/api/drug-templates/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    await db.deleteDrugTemplate(id);
+    res.json({ message: `Drug template ${id} deleted successfully` });
+  } catch (error) {
+    console.error('Error deleting drug template:', error);
+    res.status(500).json({ error: 'Failed to delete drug template' });
+  }
+});
+
 // Catch-all route to serve the React index.html for any frontend routes
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));

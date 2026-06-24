@@ -248,6 +248,17 @@ function initSQLiteSchema() {
       )
     `);
 
+    // Drug Templates table
+    sqliteDb.run(`
+      CREATE TABLE IF NOT EXISTS drug_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT,
+        items TEXT,
+        created_at TEXT
+      )
+    `);
+
     // Seed inventory with initial items if empty
     sqliteDb.get("SELECT COUNT(*) as count FROM inventory", [], (err, row) => {
       if (!err && row.count === 0) {
@@ -1336,6 +1347,215 @@ const dbHelpers = {
         });
       });
     }
+  },
+
+  // Drug Templates CRUD
+  getDrugTemplates() {
+    return new Promise((resolve, reject) => {
+      const fallbackToSQLite = () => {
+        sqliteDb.all("SELECT * FROM drug_templates ORDER BY name ASC", [], (err, rows) => {
+          if (err) reject(err);
+          else {
+            const parsed = (rows || []).map(r => {
+              let items = [];
+              try {
+                items = JSON.parse(r.items || '[]');
+              } catch (e) {
+                items = [];
+              }
+              return { ...r, items };
+            });
+            resolve(parsed);
+          }
+        });
+      };
+
+      if (dbType === 'supabase') {
+        supabase.from('drug_templates').select('*').order('name', { ascending: true })
+          .then(({ data, error }) => {
+            if (error) {
+              if (error.code === 'PGRST205') {
+                console.warn("WARNING: 'drug_templates' table does not exist in Supabase. Falling back to local SQLite database.");
+                fallbackToSQLite();
+              } else {
+                reject(error);
+              }
+            } else {
+              const parsed = (data || []).map(tpl => {
+                let items = tpl.items;
+                try {
+                  items = typeof items === 'string' ? JSON.parse(items) : (items || []);
+                } catch (e) {
+                  items = [];
+                }
+                return { ...tpl, items };
+              });
+              resolve(parsed);
+            }
+          });
+      } else {
+        fallbackToSQLite();
+      }
+    });
+  },
+
+  getDrugTemplateById(id) {
+    return new Promise((resolve, reject) => {
+      const fallbackToSQLite = () => {
+        sqliteDb.get("SELECT * FROM drug_templates WHERE id = ?", [id], (err, row) => {
+          if (err) reject(err);
+          else if (row) {
+            let items = [];
+            try {
+              items = JSON.parse(row.items || '[]');
+            } catch (e) {
+              items = [];
+            }
+            resolve({ ...row, items });
+          } else {
+            resolve(null);
+          }
+        });
+      };
+
+      if (dbType === 'supabase') {
+        supabase.from('drug_templates').select('*').eq('id', id).single()
+          .then(({ data, error }) => {
+            if (error) {
+              if (error.code === 'PGRST205') {
+                console.warn("WARNING: 'drug_templates' table does not exist in Supabase. Falling back to local SQLite database.");
+                fallbackToSQLite();
+              } else {
+                reject(error);
+              }
+            } else {
+              if (data) {
+                try {
+                  data.items = typeof data.items === 'string' ? JSON.parse(data.items) : (data.items || []);
+                } catch (e) {
+                  data.items = [];
+                }
+              }
+              resolve(data);
+            }
+          });
+      } else {
+        fallbackToSQLite();
+      }
+    });
+  },
+
+  createDrugTemplate(template) {
+    return new Promise((resolve, reject) => {
+      const { id, name, description, items, created_at } = template;
+      const itemsStr = typeof items === 'string' ? items : JSON.stringify(items);
+      
+      const fallbackToSQLite = () => {
+        sqliteDb.run(
+          "INSERT INTO drug_templates (id, name, description, items, created_at) VALUES (?, ?, ?, ?, ?)",
+          [id, name, description, itemsStr, created_at],
+          function(err) {
+            if (err) reject(err);
+            else resolve(template);
+          }
+        );
+      };
+
+      if (dbType === 'supabase') {
+        supabase.from('drug_templates').insert([{ id, name, description, items: itemsStr, created_at }]).select().single()
+          .then(({ data, error }) => {
+            if (error) {
+              if (error.code === 'PGRST205') {
+                console.warn("WARNING: 'drug_templates' table does not exist in Supabase. Falling back to local SQLite database.");
+                fallbackToSQLite();
+              } else {
+                reject(error);
+              }
+            } else {
+              if (data) {
+                try {
+                  data.items = typeof data.items === 'string' ? JSON.parse(data.items) : (data.items || []);
+                } catch (e) {
+                  data.items = [];
+                }
+              }
+              resolve(data);
+            }
+          });
+      } else {
+        fallbackToSQLite();
+      }
+    });
+  },
+
+  updateDrugTemplate(id, templateData) {
+    const { name, description, items } = templateData;
+    const itemsStr = typeof items === 'string' ? items : JSON.stringify(items);
+
+    return new Promise((resolve, reject) => {
+      const fallbackToSQLite = () => {
+        sqliteDb.run(
+          "UPDATE drug_templates SET name = ?, description = ?, items = ? WHERE id = ?",
+          [name, description, itemsStr, id],
+          function(err) {
+            if (err) reject(err);
+            else resolve({ id, name, description, items });
+          }
+        );
+      };
+
+      if (dbType === 'supabase') {
+        supabase.from('drug_templates').update({ name, description, items: itemsStr }).eq('id', id).select().single()
+          .then(({ data, error }) => {
+            if (error) {
+              if (error.code === 'PGRST205') {
+                console.warn("WARNING: 'drug_templates' table does not exist in Supabase. Falling back to local SQLite database.");
+                fallbackToSQLite();
+              } else {
+                reject(error);
+              }
+            } else {
+              if (data) {
+                try {
+                  data.items = typeof data.items === 'string' ? JSON.parse(data.items) : (data.items || []);
+                } catch (e) {
+                  data.items = [];
+                }
+              }
+              resolve(data);
+            }
+          });
+      } else {
+        fallbackToSQLite();
+      }
+    });
+  },
+
+  deleteDrugTemplate(id) {
+    return new Promise((resolve, reject) => {
+      const fallbackToSQLite = () => {
+        sqliteDb.run("DELETE FROM drug_templates WHERE id = ?", [id], function(err) {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      };
+
+      if (dbType === 'supabase') {
+        supabase.from('drug_templates').delete().eq('id', id)
+          .then(({ error }) => {
+            if (error) {
+              if (error.code === 'PGRST205') {
+                console.warn("WARNING: 'drug_templates' table does not exist in Supabase. Falling back to local SQLite database.");
+                fallbackToSQLite();
+              } else {
+                reject(error);
+              }
+            } else resolve(true);
+          });
+      } else {
+        fallbackToSQLite();
+      }
+    });
   }
 };
 

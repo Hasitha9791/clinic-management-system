@@ -8,6 +8,7 @@ import Appointments from './components/Appointments';
 import Communications from './components/Communications';
 import Users from './components/Users';
 import ClinicProfile from './components/ClinicProfile';
+import DrugTemplates from './components/DrugTemplates';
 
 const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000' ? 'http://localhost:5000' : '');
 
@@ -92,8 +93,8 @@ export default function App() {
   useEffect(() => {
     if (user) {
       const allowed = Array.isArray(user.allowed_tabs) ? user.allowed_tabs : (
-        user.role === 'admin' ? ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile'] : (
-          user.role === 'doctor' ? ['dashboard', 'onboarding', 'consultations', 'communications'] : (
+        user.role === 'admin' ? ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile', 'drug-templates'] : (
+          user.role === 'doctor' ? ['dashboard', 'onboarding', 'consultations', 'communications', 'drug-templates'] : (
             user.role === 'receptionist' ? ['dashboard', 'onboarding', 'appointments', 'communications'] : (
               user.role === 'cashier' ? ['dashboard', 'billing', 'inventory', 'communications'] : ['dashboard']
             )
@@ -204,7 +205,7 @@ export default function App() {
     const role = user.role;
     if (role === 'admin') return true;
     if (role === 'doctor') {
-      return ['dashboard', 'onboarding', 'consultations', 'communications'].includes(tabName);
+      return ['dashboard', 'onboarding', 'consultations', 'communications', 'drug-templates'].includes(tabName);
     }
     if (role === 'receptionist') {
       return ['dashboard', 'onboarding', 'appointments', 'communications'].includes(tabName);
@@ -434,6 +435,17 @@ export default function App() {
                 </button>
               </li>
             )}
+            {isTabAllowed('drug-templates') && (
+              <li className="nav-item">
+                <button 
+                  onClick={() => selectTab('drug-templates')} 
+                  className={`nav-button ${activeTab === 'drug-templates' ? 'active' : ''}`}
+                >
+                  <svg className="nav-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 9.5l5 5"></path><path d="M6 18A6 6 0 1 1 18 6 6 6 0 1 1 6 18z"></path><path d="M12 6a6 6 0 0 1 6 6"></path></svg>
+                  Drug Templates
+                </button>
+              </li>
+            )}
             {isTabAllowed('communications') && (
               <li className="nav-item">
                 <button 
@@ -515,6 +527,7 @@ export default function App() {
               {activeTab === 'communications' && 'Communications Log'}
               {activeTab === 'users' && 'Users & Permissions'}
               {activeTab === 'clinic-profile' && 'Clinic Profile Settings'}
+              {activeTab === 'drug-templates' && 'Drug Templates / Diagnosis Presets'}
             </h1>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -565,6 +578,10 @@ export default function App() {
         
         {activeTab === 'inventory' && (
           <Inventory />
+        )}
+
+        {activeTab === 'drug-templates' && (
+          <DrugTemplates />
         )}
 
         {activeTab === 'communications' && (

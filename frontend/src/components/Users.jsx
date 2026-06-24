@@ -9,14 +9,15 @@ const SYSTEM_TABS = [
   { id: 'consultations', label: '🩺 Doctor Consultations' },
   { id: 'billing', label: '💳 POS & Billing Cart' },
   { id: 'inventory', label: '📦 Stock Inventory' },
+  { id: 'drug-templates', label: '💊 Drug Templates' },
   { id: 'communications', label: '💬 Communications Log' },
   { id: 'users', label: '🔧 Users & Permissions' },
   { id: 'clinic-profile', label: '⚙️ Clinic Profile Settings' }
 ];
 
 const DEFAULT_ROLE_TABS = {
-  admin: ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'communications', 'users', 'clinic-profile'],
-  doctor: ['dashboard', 'onboarding', 'consultations', 'communications'],
+  admin: ['dashboard', 'onboarding', 'appointments', 'consultations', 'billing', 'inventory', 'drug-templates', 'communications', 'users', 'clinic-profile'],
+  doctor: ['dashboard', 'onboarding', 'consultations', 'drug-templates', 'communications'],
   receptionist: ['dashboard', 'onboarding', 'appointments', 'communications'],
   cashier: ['dashboard', 'billing', 'inventory', 'communications'],
   custom: ['dashboard']
@@ -32,6 +33,7 @@ const getShortTabLabel = (tabId) => {
     case 'consultations': return '🩺 Consults';
     case 'billing': return '💳 Billing';
     case 'inventory': return '📦 Inventory';
+    case 'drug-templates': return '💊 Templates';
     case 'communications': return '💬 Messages';
     case 'users': return '🔧 Users';
     case 'clinic-profile': return '⚙️ Profile';
