@@ -576,6 +576,109 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     document.body.classList.remove('print-only-receipt');
   };
 
+  const handlePrintOutsidePrescription = () => {
+    if (outsideItems.length === 0) {
+      if (window.showToast) window.showToast('No outside pharmacy items to print.', 'warning');
+      return;
+    }
+    
+    const printWindow = window.open('', '_blank');
+    const clinicName = clinicProfile ? clinicProfile.name : "Ayu Health Suite";
+    
+    let rows = '';
+    outsideItems.forEach((item, index) => {
+      rows += `
+        <tr>
+          <td style="padding: 12px; border: 1px solid #fcd34d; font-weight: 500; color: #1e293b;">${index + 1}</td>
+          <td style="padding: 12px; border: 1px solid #fcd34d; font-weight: 700; color: #1e293b;">${item.name}</td>
+          <td style="padding: 12px; border: 1px solid #fcd34d; font-weight: 700; color: #d97706; text-align: right;">${item.qty}</td>
+        </tr>
+      `;
+    });
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Outside Pharmacy Purchase Slip - ${selectedPatient.name}</title>
+          <style>
+            body { font-family: 'Inter', Arial, sans-serif; color: #334155; padding: 40px; margin: 0; line-height: 1.5; background: #fff; }
+            .header { text-align: center; border-bottom: 2px dashed #f59e0b; padding-bottom: 20px; margin-bottom: 25px; }
+            .clinic-title { font-size: 24px; font-weight: 800; color: #d97706; margin: 0; }
+            .clinic-sub { font-size: 11px; color: #64748b; margin: 5px 0 0 0; text-transform: uppercase; letter-spacing: 1px; }
+            .patient-info { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background-color: #fffbeb; padding: 15px; border-radius: 8px; margin-bottom: 25px; border: 1px solid #fcd34d; font-size: 14px; }
+            .patient-info div { margin-bottom: 5px; }
+            .rx-title { font-size: 16px; font-weight: 800; margin-bottom: 15px; color: #1e293b; display: flex; align-items: center; gap: 6px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 14px; }
+            th { background-color: #fef3c7; color: #92400e; font-weight: 700; text-align: left; padding: 12px; border: 1px solid #fcd34d; }
+            .footer { margin-top: 60px; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 20px; font-size: 12px; color: #64748b; }
+            .stamp { border: 2px solid #d97706; color: #d97706; display: inline-block; padding: 5px 10px; font-weight: 800; border-radius: 4px; font-size: 12px; text-transform: uppercase; transform: rotate(-5deg); margin-bottom: 15px; }
+            @media print {
+              body { padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 class="clinic-title">${clinicName}</h1>
+            <p class="clinic-sub">Outside Pharmacy Purchase slip</p>
+          </div>
+          
+          <div class="patient-info">
+            <div><strong>Patient Name:</strong> ${selectedPatient.name}</div>
+            <div><strong>Date:</strong> ${new Date().toLocaleDateString()}</div>
+            <div><strong>Patient ID:</strong> ${selectedPatient.id}</div>
+            <div><strong>Purchase Mode:</strong> External Pharmacy (Out of stock at clinic)</div>
+          </div>
+          
+          <div style="text-align: right;">
+            <div class="stamp">Prescription Copy</div>
+          </div>
+
+          <div class="rx-title">⚠️ Requested Items to purchase from Outside Pharmacy:</div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Drug / Item Name Description</th>
+                <th style="width: 120px; text-align: right;">Quantity Required</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+          
+          <div style="font-size: 12px; color: #64748b; font-style: italic; margin-top: 15px; line-height: 1.6;">
+            *Note: The above items were prescribed by the doctor, but are currently not available in our clinic pharmacy stock. Please purchase them from any external licensed pharmacy.
+          </div>
+
+          <div style="margin-top: 80px; display: flex; justify-content: space-between; font-size: 14px;">
+            <div>
+              <p>_______________________</p>
+              <p>Pharmacist / Cashier Signature</p>
+            </div>
+            <div style="text-align: right;">
+              <p>_______________________</p>
+              <p>Clinic Stamp & Date</p>
+            </div>
+          </div>
+          
+          <div class="footer">
+            Powered by Ayu Health Suite · Clinic Management System
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   const handleExportBillingExcel = () => {
     if (filteredBills.length === 0) {
       if (window.showToast) window.showToast('No billing records to export.', 'warning');
@@ -1953,12 +2056,30 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
               <button onClick={() => { setShowReceipt(false); setOutsideItems([]); }} className="btn btn-secondary">
                 Close
               </button>
+              {outsideItems.length > 0 && (
+                <button 
+                  onClick={handlePrintOutsidePrescription} 
+                  className="btn" 
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '0.4rem', 
+                    backgroundColor: '#f59e0b', 
+                    color: '#fff', 
+                    borderColor: '#d97706',
+                    fontWeight: 600,
+                    margin: 0
+                  }}
+                >
+                  💊 Print Outside Slip
+                </button>
+              )}
               <button onClick={handlePrint} className="btn btn-success" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
                   <rect x="6" y="14" width="12" height="8"/>
                 </svg>
-                Print / Save PDF
+                Print Invoice / Receipt
               </button>
             </div>
           </div>
