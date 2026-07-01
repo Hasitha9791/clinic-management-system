@@ -324,14 +324,10 @@ export default function Consultations({ selectedPatient, onSelectPatient, onGoTo
           ${outsideDispensedHtml}
           ${instructionsHtml}
           
-          <div style="margin-top: 80px; display: flex; justify-content: space-between; font-size: 14px;">
-            <div>
-              <p>_______________________</p>
-              <p>Pharmacist Signature</p>
-            </div>
+          <div style="margin-top: 80px; display: flex; justify-content: flex-end; font-size: 14px;">
             <div style="text-align: right;">
               <p>_______________________</p>
-              <p>Doctor Signature / Stamp</p>
+              <p style="font-weight: 700; color: #111827; margin: 5px 0 0 0;">Doctor Signature & Seal</p>
             </div>
           </div>
           
