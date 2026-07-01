@@ -64,6 +64,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [outsideItems, setOutsideItems] = useState([]);
   const [showOutsideDetailsModal, setShowOutsideDetailsModal] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     fetchInventory();
@@ -441,34 +442,42 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
       return;
     }
 
-    if (invItem.qty < currentItem.qty) {
-      if (!window.confirm(`Insufficient stock! Currently available: ${invItem.qty} ${invItem.unit}. Proceed anyway?`)) {
-        return;
+    const proceedWithAdd = () => {
+      // Check if item already exists in cart
+      const existingIndex = cart.findIndex(c => c.id === invItem.id);
+      if (existingIndex > -1) {
+        const updatedCart = [...cart];
+        updatedCart[existingIndex].qty += parseInt(currentItem.qty);
+        setCart(updatedCart);
+      } else {
+        const newItem = {
+          id: invItem.id,
+          name: invItem.name,
+          qty: parseInt(currentItem.qty) || 1,
+          price: invItem.price,
+          type: invItem.type,
+          barcode: invItem.barcode,
+          dosage: '',
+          duration: ''
+        };
+        setCart(prev => [...prev, newItem]);
       }
-    }
 
-    // Check if item already exists in cart
-    const existingIndex = cart.findIndex(c => c.id === invItem.id);
-    if (existingIndex > -1) {
-      const updatedCart = [...cart];
-      updatedCart[existingIndex].qty += parseInt(currentItem.qty);
-      setCart(updatedCart);
+      setCurrentItem({ id: '', qty: 1, customPrice: '', customName: '' });
+      setTimeout(() => {
+        if (barcodeInputRef.current) barcodeInputRef.current.focus();
+      }, 100);
+    };
+
+    if (invItem.qty < currentItem.qty) {
+      setConfirmDialog({
+        title: '⚠️ Insufficient Stock Warning',
+        message: `Insufficient stock! Currently available: ${invItem.qty} ${invItem.unit || 'units'}. Proceed anyway?`,
+        onConfirm: proceedWithAdd
+      });
     } else {
-      const newItem = {
-        id: invItem.id,
-        name: invItem.name,
-        qty: parseInt(currentItem.qty) || 1,
-        price: invItem.price,
-        type: invItem.type,
-        barcode: invItem.barcode
-      };
-      setCart(prev => [...prev, newItem]);
+      proceedWithAdd();
     }
-
-    setCurrentItem({ id: '', qty: 1, customPrice: '', customName: '' });
-    setTimeout(() => {
-      if (barcodeInputRef.current) barcodeInputRef.current.focus();
-    }, 100);
   };
 
   const handleRemoveFromCart = (index) => {
@@ -791,26 +800,29 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     if (window.showToast) window.showToast(`Billing report exported: ${fileName}`, 'success');
   };
 
-  const handleVoidInvoice = async (id) => {
-    if (!window.confirm("Are you sure you want to void this invoice? This will restore all stock items and set its status to VOIDED. This action is audited and irreversible.")) {
-      return;
-    }
-    try {
-      const res = await fetch(`${API_URL}/api/billing/${id}/void`, {
-        method: 'PUT'
-      });
-      if (res.ok) {
-        if (window.showToast) window.showToast('Invoice successfully voided. Quantities returned to inventory.', 'success');
-        fetchBillingHistory();
-        fetchInventory();
-      } else {
-        const err = await res.json();
-        if (window.showToast) window.showToast(err.error || 'Failed to void invoice.', 'danger');
+  const handleVoidInvoice = (id) => {
+    setConfirmDialog({
+      title: '🚨 Void Invoice Warning',
+      message: 'Are you sure you want to void this invoice? This will restore all stock items and set its status to VOIDED. This action is audited and irreversible.',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`${API_URL}/api/billing/${id}/void`, {
+            method: 'PUT'
+          });
+          if (res.ok) {
+            if (window.showToast) window.showToast('Invoice successfully voided. Quantities returned to inventory.', 'success');
+            fetchBillingHistory();
+            fetchInventory();
+          } else {
+            const err = await res.json();
+            if (window.showToast) window.showToast(err.error || 'Failed to void invoice.', 'danger');
+          }
+        } catch (err) {
+          console.error('Error voiding invoice:', err);
+          if (window.showToast) window.showToast('Error voiding invoice. Please try again.', 'danger');
+        }
       }
-    } catch (err) {
-      console.error('Error voiding invoice:', err);
-      if (window.showToast) window.showToast('Error voiding invoice. Please try again.', 'danger');
-    }
+    });
   };
 
   const handlePayNow = async () => {
@@ -2229,6 +2241,52 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                 style={{ backgroundColor: '#d97706', borderColor: '#b45309' }}
               >
                 🖨️ Print Prescription Slip
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reusable Custom Confirmation Message Box Modal */}
+      {confirmDialog && (
+        <div className="modal-overlay" style={{ zIndex: 1200 }}>
+          <div className="modal-content" style={{ maxWidth: '400px', padding: '1.8rem', textAlign: 'center', borderRadius: '12px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>
+              {confirmDialog.title.includes('Stock') ? '⚠️' : '🚨'}
+            </div>
+            <h3 style={{ marginBottom: '0.75rem', color: confirmDialog.title.includes('Stock') ? '#d97706' : 'var(--danger)', fontSize: '1.25rem', fontWeight: 800 }}>
+              {confirmDialog.title}
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+              {confirmDialog.message}
+            </p>
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              <button 
+                onClick={() => {
+                  if (confirmDialog.onCancel) confirmDialog.onCancel();
+                  setConfirmDialog(null);
+                }} 
+                className="btn btn-secondary"
+                style={{ flex: 1, margin: 0 }}
+              >
+                No, Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                  setConfirmDialog(null);
+                }} 
+                className="btn"
+                style={{ 
+                  flex: 1, 
+                  backgroundColor: confirmDialog.title.includes('Stock') ? '#d97706' : 'var(--danger)', 
+                  borderColor: confirmDialog.title.includes('Stock') ? '#b45309' : 'var(--danger)',
+                  color: '#fff',
+                  fontWeight: 600,
+                  margin: 0
+                }}
+              >
+                Yes, Proceed
               </button>
             </div>
           </div>
