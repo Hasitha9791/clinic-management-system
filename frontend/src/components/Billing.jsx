@@ -315,6 +315,81 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     setSelectedTemplateId('');
   };
 
+  const handleLoadPrescription = (medications) => {
+    if (!medications || medications.length === 0) return;
+
+    const newItems = [];
+    let lowStockWarnings = [];
+
+    medications.forEach(med => {
+      // Find matching item in inventory by name (case-insensitive)
+      const invItem = inventory.find(i => i.name.toLowerCase().trim() === med.name.toLowerCase().trim() && i.type === 'drug');
+      
+      if (invItem) {
+        // Check stock level
+        if (invItem.qty <= 0) {
+          lowStockWarnings.push(`⚠️ ${invItem.name} is completely out of stock!`);
+        } else if (invItem.qty < med.qty) {
+          lowStockWarnings.push(`⚠️ Insufficient stock for ${invItem.name} (Prescribed: ${med.qty}, Available: ${invItem.qty})`);
+        }
+
+        newItems.push({
+          id: invItem.id,
+          name: invItem.name,
+          qty: med.qty || 1,
+          price: invItem.price,
+          type: invItem.type,
+          barcode: invItem.barcode || ''
+        });
+      } else {
+        // Item not found in stock, load it as a custom item in the cart
+        newItems.push({
+          id: 'custom_' + Math.random().toString(36).substr(2, 9),
+          name: med.name,
+          qty: med.qty || 1,
+          price: 0, // cashier will manually fill in price or check stock
+          type: 'drug'
+        });
+      }
+    });
+
+    if (newItems.length === 0) {
+      if (window.showToast) window.showToast('No valid items found in prescription.', 'warning');
+      return;
+    }
+
+    // Merge newItems into cart
+    setCart(prev => {
+      const updated = [...prev];
+      newItems.forEach(newItem => {
+        const isCustom = newItem.id.startsWith('custom_');
+        const existingIdx = updated.findIndex(c => {
+          if (isCustom) {
+            return c.id.startsWith('custom_') && c.name === newItem.name;
+          } else {
+            return c.id === newItem.id;
+          }
+        });
+
+        if (existingIdx > -1) {
+          updated[existingIdx].qty += newItem.qty;
+        } else {
+          updated.push(newItem);
+        }
+      });
+      return updated;
+    });
+
+    if (window.showToast) {
+      window.showToast(`Loaded ${newItems.length} clinic prescribed items into cart.`, 'success');
+      if (lowStockWarnings.length > 0) {
+        lowStockWarnings.forEach(warn => {
+          window.showToast(warn, 'warning');
+        });
+      }
+    }
+  };
+
   const handleAddItemToCart = () => {
     if (currentItem.id === 'custom') {
       if (!currentItem.customName || !currentItem.customPrice) {
@@ -815,6 +890,53 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                 return null;
               })()
             )}
+
+            {/* Structured Prescription Auto-Load Alert */}
+            {selectedVisit && selectedVisit.treatment && (() => {
+              try {
+                if (selectedVisit.treatment.startsWith('{') || selectedVisit.treatment.startsWith('[')) {
+                  const parsed = JSON.parse(selectedVisit.treatment);
+                  let medications = [];
+                  if (Array.isArray(parsed)) {
+                    medications = parsed;
+                  } else if (parsed && typeof parsed === 'object') {
+                    medications = parsed.medications || [];
+                  }
+                  
+                  // Filter out only clinic dispensed items
+                  const clinicItems = medications.filter(m => m.source === 'clinic');
+                  
+                  if (clinicItems.length > 0) {
+                    return (
+                      <div style={{
+                        backgroundColor: 'rgba(15, 191, 123, 0.1)',
+                        border: '1px solid rgba(15, 191, 123, 0.3)',
+                        color: 'var(--dark)',
+                        padding: '0.75rem 1rem',
+                        borderRadius: 'var(--radius-sm)',
+                        marginBottom: '1rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontSize: '0.85rem'
+                      }}>
+                        <span>📋 Prescription contains <strong>{clinicItems.length} clinic-dispensed</strong> items.</span>
+                        <button 
+                          onClick={() => handleLoadPrescription(clinicItems)} 
+                          className="btn btn-primary" 
+                          style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                        >
+                          ⚡ Load Prescription Items
+                        </button>
+                      </div>
+                    );
+                  }
+                }
+              } catch (e) {
+                // Ignore parse failures
+              }
+              return null;
+            })()}
 
             {/* Barcode Scanner Input Zone */}
             <div style={{

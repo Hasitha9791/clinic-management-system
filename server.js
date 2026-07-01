@@ -1210,6 +1210,97 @@ app.delete('/api/drug-templates/:id', async (req, res) => {
   }
 });
 
+// ==========================================================================
+// RESEND EMAIL SERVICE ENDPOINTS (Option B)
+// ==========================================================================
+const { Resend } = require('resend');
+
+// Initialize Resend with key from .env (fallback to empty string to prevent crashes on undefined key)
+const resendApiKey = process.env.RESEND_API_KEY === 're_your_api_key_here' ? '' : (process.env.RESEND_API_KEY || '');
+const resend = new Resend(resendApiKey);
+
+// Send Demo Slot Booking Email
+app.post('/api/send-demo-email', async (req, res) => {
+  const { name, email, phone, date, time } = req.body;
+
+  if (!name || !email || !phone || !date || !time) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  try {
+    if (!resendApiKey) {
+      console.warn('[EMAIL] Resend API Key is not set. Simulating success...');
+      return res.status(200).json({ success: true, message: 'Simulation mode: Resend API key is not configured.' });
+    }
+
+    const data = await resend.emails.send({
+      from: 'Ayu Health Suite <onboarding@resend.dev>', // Free tier default sandbox sender
+      to: 'axentrat@gmail.com', // Admin notification receiver address
+      subject: `New Demo Slot Request from ${name}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <h2 style="color: #0fbf7b; border-bottom: 2px solid #0fbf7b; padding-bottom: 10px; margin-top: 0;">New Demo Booking Request</h2>
+          <p>A user has requested a live demo schedule for Ayu Health Suite.</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <tr style="background-color: #f9fafb;"><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Full Name:</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${name}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Email:</td><td style="padding: 8px; border: 1px solid #e5e7eb;"><a href="mailto:${email}">${email}</a></td></tr>
+            <tr style="background-color: #f9fafb;"><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Telephone:</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${phone}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Preferred Date:</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${date}</td></tr>
+            <tr style="background-color: #f9fafb;"><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Time Slot:</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${time}</td></tr>
+          </table>
+          <p style="font-size: 0.85rem; color: #64748b; margin-top: 20px; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 15px;">Powered by Axentratech Software Solutions</p>
+        </div>
+      `
+    });
+    res.status(200).json({ success: true, messageId: data.id });
+  } catch (error) {
+    console.error('Resend Demo Booking Email Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to dispatch email.' });
+  }
+});
+
+// Send Contact Message Email
+app.post('/api/send-inquiry-email', async (req, res) => {
+  const { name, email, subject, message } = req.body;
+
+  if (!name || !email || !subject || !message) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  try {
+    if (!resendApiKey) {
+      console.warn('[EMAIL] Resend API Key is not set. Simulating success...');
+      return res.status(200).json({ success: true, message: 'Simulation mode: Resend API key is not configured.' });
+    }
+
+    const data = await resend.emails.send({
+      from: 'Ayu Health Suite <onboarding@resend.dev>',
+      to: 'axentrat@gmail.com',
+      subject: `New Contact Inquiry: ${subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 8px;">
+          <h2 style="color: #0fbf7b; border-bottom: 2px solid #0fbf7b; padding-bottom: 10px; margin-top: 0;">New Contact Inquiry</h2>
+          <p>A user has sent an inquiry via the Ayu Health Suite contact form.</p>
+          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+            <tr style="background-color: #f9fafb;"><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Sender Name:</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${name}</td></tr>
+            <tr><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Email:</td><td style="padding: 8px; border: 1px solid #e5e7eb;"><a href="mailto:${email}">${email}</a></td></tr>
+            <tr style="background-color: #f9fafb;"><td style="padding: 8px; border: 1px solid #e5e7eb; font-weight: bold;">Subject:</td><td style="padding: 8px; border: 1px solid #e5e7eb;">${subject}</td></tr>
+          </table>
+          <div style="margin-top: 20px; padding: 15px; background-color: #f3f4f6; border-radius: 6px; border-left: 4px solid #0fbf7b;">
+            <h4 style="margin: 0 0 8px 0; color: #1f2937;">Message:</h4>
+            <p style="margin: 0; white-space: pre-line; line-height: 1.5; color: #4b5563;">${message}</p>
+          </div>
+          <p style="font-size: 0.85rem; color: #64748b; margin-top: 20px; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 15px;">Powered by Axentratech Software Solutions</p>
+        </div>
+      `
+    });
+    res.status(200).json({ success: true, messageId: data.id });
+  } catch (error) {
+    console.error('Resend Contact Inquiry Email Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to dispatch email.' });
+  }
+});
+
 // Catch-all route to serve the React index.html for any frontend routes
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, 'frontend/dist/index.html'));
