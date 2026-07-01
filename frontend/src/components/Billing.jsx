@@ -341,7 +341,9 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
           qty: med.qty || 1,
           price: invItem.price,
           type: invItem.type,
-          barcode: invItem.barcode || ''
+          barcode: invItem.barcode || '',
+          dosage: med.dosage || '',
+          duration: med.duration || ''
         });
       } else {
         // Item not found in stock, load it as a custom item in the cart
@@ -350,7 +352,9 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
           name: med.name,
           qty: med.qty || 1,
           price: 0, // cashier will manually fill in price or check stock
-          type: 'drug'
+          type: 'drug',
+          dosage: med.dosage || '',
+          duration: med.duration || ''
         });
       }
     });
@@ -393,8 +397,13 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   };
 
   const handleConvertToOutside = (item, index) => {
-    // Add to outsideItems state
-    setOutsideItems(prev => [...prev, { name: item.name, qty: item.qty }]);
+    // Add to outsideItems state with dosage and duration
+    setOutsideItems(prev => [...prev, { 
+      name: item.name, 
+      qty: item.qty,
+      dosage: item.dosage || '',
+      duration: item.duration || ''
+    }]);
     
     // Remove from cart
     setCart(prev => prev.filter((_, i) => i !== index));
@@ -591,6 +600,8 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
         <tr>
           <td style="padding: 12px; border: 1px solid #fcd34d; font-weight: 500; color: #1e293b;">${index + 1}</td>
           <td style="padding: 12px; border: 1px solid #fcd34d; font-weight: 700; color: #1e293b;">${item.name}</td>
+          <td style="padding: 12px; border: 1px solid #fcd34d; color: #334155;">${item.dosage || '-'}</td>
+          <td style="padding: 12px; border: 1px solid #fcd34d; color: #334155;">${item.duration || '-'}</td>
           <td style="padding: 12px; border: 1px solid #fcd34d; font-weight: 700; color: #d97706; text-align: right;">${item.qty}</td>
         </tr>
       `;
@@ -641,7 +652,9 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
               <tr>
                 <th style="width: 50px;">#</th>
                 <th>Drug / Item Name Description</th>
-                <th style="width: 120px; text-align: right;">Quantity Required</th>
+                <th>Dosage / Instructions</th>
+                <th>Duration</th>
+                <th style="width: 120px; text-align: right;">Qty Required</th>
               </tr>
             </thead>
             <tbody>
@@ -653,14 +666,10 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
             *Note: The above items were prescribed by the doctor, but are currently not available in our clinic pharmacy stock. Please purchase them from any external licensed pharmacy.
           </div>
 
-          <div style="margin-top: 80px; display: flex; justify-content: space-between; font-size: 14px;">
-            <div>
-              <p>_______________________</p>
-              <p>Pharmacist / Cashier Signature</p>
-            </div>
+          <div style="margin-top: 80px; display: flex; justify-content: flex-end; font-size: 14px;">
             <div style="text-align: right;">
               <p>_______________________</p>
-              <p>Clinic Stamp & Date</p>
+              <p style="font-weight: 700; color: #1e293b; margin: 5px 0 0 0;">Doctor Signature & Seal</p>
             </div>
           </div>
           
