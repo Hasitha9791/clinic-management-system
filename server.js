@@ -347,6 +347,11 @@ async function sendWhatsAppMessage(toPhone, bodyContent) {
     return { status: 'simulated', sid: null };
   }
 
+  if (!isWwebReady || !wwebClient) {
+    console.warn('[WHATSAPP] Gateway not connected. Simulating message dispatch.');
+    return { status: 'simulated', sid: 'sim_' + Math.random().toString(36).substr(2, 9) };
+  }
+
   // Format to standard WhatsApp chat ID: country code followed by number (e.g. 94774947440)
   let formattedTo = toPhone.trim().replace(/[-\s()]/g, '');
   if (!formattedTo.startsWith('+')) {
@@ -377,6 +382,11 @@ async function sendWhatsAppWithPDF(toPhone, bodyContent, pdfBase64, filename) {
   if (!toPhone) {
     console.warn('[WHATSAPP] No recipient number provided. Simulating send.');
     return { status: 'simulated', sid: null };
+  }
+
+  if (!isWwebReady || !wwebClient) {
+    console.warn('[WHATSAPP] Gateway not connected. Simulating PDF dispatch.');
+    return { status: 'simulated', sid: 'sim_' + Math.random().toString(36).substr(2, 9) };
   }
 
   let formattedTo = toPhone.trim().replace(/[-\s()]/g, '');

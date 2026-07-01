@@ -235,7 +235,7 @@ export default function Communications() {
                       {log.message}
                     </td>
                     <td>
-                      <span className="badge badge-success" style={{ fontWeight: 700 }}>
+                      <span className={`badge ${log.status.toLowerCase() === 'failed' ? 'badge-danger' : 'badge-success'}`} style={{ fontWeight: 700 }}>
                         {log.status.toUpperCase()}
                       </span>
                     </td>
