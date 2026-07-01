@@ -32,15 +32,22 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy all project files (except those in .gitignore / .dockerignore)
 COPY . .
 
 # Build the React frontend
 RUN cd frontend && npm install && npm run build
 
+# Create necessary directories and set correct permissions for Hugging Face UID 1000
+RUN mkdir -p /app/.wwebjs_auth /app/frontend/public && \
+    chown -R 1000:1000 /app && \
+    chmod -R 777 /app
+
 # Expose the default Hugging Face port
 EXPOSE 7860
 ENV PORT=7860
+
+# Run as user 1000
+USER 1000
 
 # Start the Express server
 CMD ["node", "server.js"]
