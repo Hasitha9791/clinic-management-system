@@ -127,8 +127,21 @@ async function initWhatsApp(attempt = 1) {
     await wwebClient.initialize();
   } catch (err) {
     console.error(`[WHATSAPP] Init failed (attempt ${attempt}): ${err.message}`);
+    
+    // Clean up zombie browser before retry to release folder lock
+    try {
+      if (wwebClient && wwebClient.pupBrowser) {
+        console.log('[WHATSAPP] Closing zombie browser process to free lock...');
+        await wwebClient.pupBrowser.close();
+      }
+    } catch (closeErr) {
+      console.warn('[WHATSAPP] Error closing zombied browser:', closeErr.message);
+    }
+    
     if (attempt < MAX_ATTEMPTS) {
       console.log(`[WHATSAPP] Retrying in ${RETRY_DELAY_MS / 1000}s...`);
+      // Replace with a completely fresh client instance to start clean
+      wwebClient = createWhatsAppClient();
       setTimeout(() => initWhatsApp(attempt + 1), RETRY_DELAY_MS);
     } else {
       console.error('[WHATSAPP] Max retry attempts reached. Messaging unavailable until restart.');
@@ -1217,7 +1230,7 @@ const { Resend } = require('resend');
 
 // Initialize Resend with key from .env (fallback to empty string to prevent crashes on undefined key)
 const resendApiKey = process.env.RESEND_API_KEY === 're_your_api_key_here' ? '' : (process.env.RESEND_API_KEY || '');
-const resend = new Resend(resendApiKey);
+const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
 // Send Demo Slot Booking Email
 app.post('/api/send-demo-email', async (req, res) => {
@@ -1228,7 +1241,7 @@ app.post('/api/send-demo-email', async (req, res) => {
   }
 
   try {
-    if (!resendApiKey) {
+    if (!resend) {
       console.warn('[EMAIL] Resend API Key is not set. Simulating success...');
       return res.status(200).json({ success: true, message: 'Simulation mode: Resend API key is not configured.' });
     }
@@ -1268,7 +1281,7 @@ app.post('/api/send-inquiry-email', async (req, res) => {
   }
 
   try {
-    if (!resendApiKey) {
+    if (!resend) {
       console.warn('[EMAIL] Resend API Key is not set. Simulating success...');
       return res.status(200).json({ success: true, message: 'Simulation mode: Resend API key is not configured.' });
     }
