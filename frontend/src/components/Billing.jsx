@@ -62,6 +62,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
 
   const [drugTemplates, setDrugTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [outsideItems, setOutsideItems] = useState([]);
 
   useEffect(() => {
     fetchInventory();
@@ -135,6 +136,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
     setCart([
       { id: 'custom_consult', name: 'Doctor Consultation Fee', qty: 1, price: defaultFee, type: 'service' }
     ]);
+    setOutsideItems([]);
     setIsInsurance(false);
     setIsSplitPayment(false);
     setInsuranceAmount('');
@@ -387,6 +389,18 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
           window.showToast(warn, 'warning');
         });
       }
+    }
+  };
+
+  const handleConvertToOutside = (item, index) => {
+    // Add to outsideItems state
+    setOutsideItems(prev => [...prev, { name: item.name, qty: item.qty }]);
+    
+    // Remove from cart
+    setCart(prev => prev.filter((_, i) => i !== index));
+    
+    if (window.showToast) {
+      window.showToast(`"${item.name}" converted to outside pharmacy recommendation. Billed total updated.`, 'info');
     }
   };
 
@@ -1148,9 +1162,36 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                         </td>
                         <td style={{ fontWeight: 600 }}>Rs. {fmtAmt(item.qty * item.price)}</td>
                         <td>
-                          <button onClick={() => handleRemoveFromCart(index)} className="btn btn-danger" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem' }}>
-                            Remove
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.25rem' }}>
+                            <button onClick={() => handleRemoveFromCart(index)} className="btn btn-danger" style={{ padding: '0.3rem 0.6rem', fontSize: '0.8rem', margin: 0 }}>
+                              Remove
+                            </button>
+                            {item.id && item.id.startsWith('inv_') && (() => {
+                              const invItem = inventory.find(i => i.id === item.id);
+                              if (invItem && item.qty > invItem.qty) {
+                                return (
+                                  <button 
+                                    type="button"
+                                    onClick={() => handleConvertToOutside(item, index)} 
+                                    className="btn btn-secondary" 
+                                    style={{ 
+                                      padding: '0.3rem 0.6rem', 
+                                      fontSize: '0.8rem', 
+                                      backgroundColor: 'var(--warning-light)', 
+                                      borderColor: 'var(--warning)', 
+                                      color: 'var(--dark)', 
+                                      fontWeight: 600,
+                                      margin: 0
+                                    }}
+                                    title="Convert to outside pharmacy purchase due to insufficient stock"
+                                  >
+                                    💊 Buy Outside
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1664,7 +1705,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
       {showReceipt && generatedInvoice && (
         <div className="modal-overlay">
           <div className="modal-content" style={{ maxWidth: '720px', padding: '2rem' }}>
-            <button onClick={() => setShowReceipt(false)} className="close-modal">&times;</button>
+            <button onClick={() => { setShowReceipt(false); setOutsideItems([]); }} className="close-modal">&times;</button>
 
             {/* ── INVOICE PRINT AREA ───────────────────────────────────────── */}
             <div className="invoice-print-area" id="print-area">
@@ -1823,6 +1864,41 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                 </div>
               </div>
 
+              {/* OUTSIDE PHARMACY RECOMMENDATIONS IN RECEIPT */}
+              {outsideItems.length > 0 && (
+                <div style={{
+                  marginTop: '1.5rem',
+                  border: '1.5px dashed #f59e0b',
+                  borderRadius: '8px',
+                  padding: '1rem',
+                  backgroundColor: 'rgba(245, 158, 11, 0.03)',
+                  textAlign: 'left'
+                }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    ⚠️ Outside Pharmacy Purchase (Out of stock at clinic)
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #f59e0b', textAlign: 'left', color: '#b45309' }}>
+                        <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600 }}>Item Description</th>
+                        <th style={{ padding: '0.4rem 0.5rem', fontWeight: 600, textAlign: 'right' }}>Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {outsideItems.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px dashed #fcd34d' }}>
+                          <td style={{ padding: '0.4rem 0.5rem', fontWeight: 600, color: '#1f2937' }}>{item.name}</td>
+                          <td style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>{item.qty}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ fontSize: '0.72rem', color: '#d97706', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                    *Note: The above items are not available in the clinic stock. Please purchase them from an outside pharmacy.
+                  </div>
+                </div>
+              )}
+
               {/* PAYMENT STAMP + FOOTER */}
               <div style={{
                 borderTop: '2px dashed #c6e8df', marginTop: '1.75rem', paddingTop: '1.5rem',
@@ -1874,7 +1950,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
             {/* ── END INVOICE PRINT AREA ───────────────────────────────────── */}
 
             <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-              <button onClick={() => setShowReceipt(false)} className="btn btn-secondary">
+              <button onClick={() => { setShowReceipt(false); setOutsideItems([]); }} className="btn btn-secondary">
                 Close
               </button>
               <button onClick={handlePrint} className="btn btn-success" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
