@@ -63,6 +63,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
   const [drugTemplates, setDrugTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [outsideItems, setOutsideItems] = useState([]);
+  const [showOutsideDetailsModal, setShowOutsideDetailsModal] = useState(false);
 
   useEffect(() => {
     fetchInventory();
@@ -2067,7 +2068,7 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
               </button>
               {outsideItems.length > 0 && (
                 <button 
-                  onClick={handlePrintOutsidePrescription} 
+                  onClick={() => setShowOutsideDetailsModal(true)} 
                   className="btn" 
                   style={{ 
                     display: 'flex', 
@@ -2146,6 +2147,88 @@ export default function Billing({ selectedPatient, selectedVisit, onSelectPatien
                 disabled={payNowLoading}
               >
                 {payNowLoading ? 'Processing...' : `✅ Confirm Payment (${payNowMethod.toUpperCase()})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Outside Prescription Details Fill Modal */}
+      {showOutsideDetailsModal && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '600px', padding: '2rem' }}>
+            <button onClick={() => setShowOutsideDetailsModal(false)} className="close-modal">&times;</button>
+            <h3 style={{ marginBottom: '1rem', color: '#d97706', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              💊 Prescription Details for Outside Purchase
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+              Please review or fill in the Dosage and Duration details prescribed by the doctor before printing the outside pharmacy slip.
+            </p>
+            
+            <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1.5rem' }}>
+              {outsideItems.map((item, idx) => (
+                <div key={idx} style={{ 
+                  backgroundColor: '#fef3c7', 
+                  border: '1px solid #fcd34d', 
+                  borderRadius: '8px', 
+                  padding: '1rem', 
+                  marginBottom: '1rem' 
+                }}>
+                  <div style={{ fontWeight: 700, color: '#92400e', marginBottom: '0.75rem', fontSize: '0.95rem' }}>
+                    {item.name} <span style={{ float: 'right', fontWeight: 'normal', fontSize: '0.85rem' }}>Qty: {item.qty}</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#92400e', display: 'block', marginBottom: '0.25rem' }}>Dosage / Instructions</label>
+                      <input 
+                        type="text" 
+                        value={item.dosage || ''} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setOutsideItems(prev => prev.map((item, i) => i === idx ? { ...item, dosage: val } : item));
+                        }}
+                        placeholder="e.g. 1-0-1 (After Food)"
+                        className="form-input"
+                        style={{ margin: 0, padding: '0.4rem', fontSize: '0.85rem', borderColor: '#fcd34d' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#92400e', display: 'block', marginBottom: '0.25rem' }}>Duration</label>
+                      <input 
+                        type="text" 
+                        value={item.duration || ''} 
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setOutsideItems(prev => prev.map((item, i) => i === idx ? { ...item, duration: val } : item));
+                        }}
+                        placeholder="e.g. 5 Days / 1 Week"
+                        className="form-input"
+                        style={{ margin: 0, padding: '0.4rem', fontSize: '0.85rem', borderColor: '#fcd34d' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+              <button 
+                onClick={() => setShowOutsideDetailsModal(false)} 
+                className="btn btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  setShowOutsideDetailsModal(false);
+                  setTimeout(() => {
+                    handlePrintOutsidePrescription();
+                  }, 100);
+                }} 
+                className="btn btn-success"
+                style={{ backgroundColor: '#d97706', borderColor: '#b45309' }}
+              >
+                🖨️ Print Prescription Slip
               </button>
             </div>
           </div>
