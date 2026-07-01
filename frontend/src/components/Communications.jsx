@@ -28,6 +28,41 @@ export default function Communications() {
   const [error, setError] = useState(null);
   const [waStatus, setWaStatus] = useState({ connected: false, hasQr: false });
   const [qrKey, setQrKey] = useState(0);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const handleConnect = async () => {
+    try {
+      if (window.showToast) window.showToast('Initiating WhatsApp connection...', 'info');
+      const res = await fetch(`${API_URL}/api/whatsapp/connect`, { method: 'POST' });
+      if (res.ok) {
+        if (window.showToast) window.showToast('WhatsApp connection initialized. Checking status...', 'success');
+        fetchWhatsAppStatus();
+      } else {
+        const err = await res.json();
+        if (window.showToast) window.showToast(err.error || 'Failed to initialize connection.', 'danger');
+      }
+    } catch (err) {
+      console.error('Error connecting:', err);
+      if (window.showToast) window.showToast('Server error initializing connection.', 'danger');
+    }
+  };
+
+  const triggerDisconnect = async () => {
+    try {
+      if (window.showToast) window.showToast('Disconnecting WhatsApp session...', 'info');
+      const res = await fetch(`${API_URL}/api/whatsapp/disconnect`, { method: 'POST' });
+      if (res.ok) {
+        if (window.showToast) window.showToast('WhatsApp disconnected successfully. New QR code requested.', 'success');
+        fetchWhatsAppStatus();
+      } else {
+        const err = await res.json();
+        if (window.showToast) window.showToast(err.error || 'Failed to disconnect.', 'danger');
+      }
+    } catch (err) {
+      console.error('Error disconnecting:', err);
+      if (window.showToast) window.showToast('Server error disconnecting session.', 'danger');
+    }
+  };
 
   useEffect(() => {
     fetchLogs();
@@ -87,6 +122,26 @@ export default function Communications() {
                 {waStatus.connected ? 'CONNECTED' : 'DISCONNECTED / LINK REQUIRED'}
               </span>
             </div>
+            
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
+              {!waStatus.connected && (
+                <button 
+                  onClick={handleConnect} 
+                  className="btn btn-success" 
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0, padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+                >
+                  🔌 Connect / Reconnect
+                </button>
+              )}
+              <button 
+                onClick={() => setShowConfirm(true)} 
+                className="btn btn-danger" 
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0, padding: '0.45rem 0.9rem', fontSize: '0.85rem' }}
+              >
+                ❌ Disconnect & Logout
+              </button>
+            </div>
+
             {!waStatus.connected && (
               <p style={{ margin: '1rem 0 0 0', fontSize: '0.85rem', color: 'var(--warning)', fontWeight: 500 }}>
                 ⚠️ Please scan the QR code to connect your clinic phone.
@@ -107,6 +162,34 @@ export default function Communications() {
             </div>
           )}
         </div>
+
+        {/* Custom Confirmation Modal for Disconnect */}
+        {showConfirm && (
+          <div className="modal-overlay" style={{ zIndex: 1100 }}>
+            <div className="modal-content" style={{ maxWidth: '400px', padding: '1.8rem', textAlign: 'center', borderRadius: '12px' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🚨</div>
+              <h3 style={{ color: 'var(--danger)', marginBottom: '0.75rem', fontSize: '1.25rem', fontWeight: 800 }}>Disconnect WhatsApp?</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: '1.5' }}>
+                This will log out the active WhatsApp session and delete credentials. You will need to scan the QR code again to link your device.
+              </p>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button onClick={() => setShowConfirm(false)} className="btn btn-secondary" style={{ flex: 1, margin: 0 }}>
+                  Cancel
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowConfirm(false);
+                    triggerDisconnect();
+                  }} 
+                  className="btn btn-danger" 
+                  style={{ flex: 1, margin: 0, fontWeight: 600 }}
+                >
+                  Yes, Disconnect
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card">

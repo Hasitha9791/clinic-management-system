@@ -169,7 +169,6 @@ app.get('/api/whatsapp/status', (req, res) => {
     hasQr: !!qrText
   });
 });
-
 app.get('/api/whatsapp/qr', (req, res) => {
   const qrPath = path.join(__dirname, 'qr.png');
   if (fs.existsSync(qrPath)) {
@@ -177,6 +176,72 @@ app.get('/api/whatsapp/qr', (req, res) => {
     res.sendFile(qrPath);
   } else {
     res.status(404).json({ error: 'QR Code not available. Device might already be connected.' });
+  }
+});
+
+app.post('/api/whatsapp/disconnect', async (req, res) => {
+  try {
+    console.log('[WHATSAPP] Disconnect requested from EMR portal...');
+    
+    isWwebReady = false;
+    qrText = null;
+    
+    if (wwebClient) {
+      try {
+        await wwebClient.logout();
+      } catch (logoutErr) {
+        console.warn('[WHATSAPP] Client logout warning:', logoutErr.message);
+      }
+      try {
+        await wwebClient.destroy();
+      } catch (destroyErr) {
+        console.warn('[WHATSAPP] Client destroy warning:', destroyErr.message);
+      }
+    }
+
+    const authPath = path.join(__dirname, '.wwebjs_auth');
+    if (fs.existsSync(authPath)) {
+      console.log('[WHATSAPP] Purging session auth files...');
+      fs.rmSync(authPath, { recursive: true, force: true });
+    }
+
+    const qrPublicPath = path.join(__dirname, 'frontend/public/qr.png');
+    const qrRootPath   = path.join(__dirname, 'qr.png');
+    if (fs.existsSync(qrPublicPath)) {
+      try { fs.unlinkSync(qrPublicPath); } catch(e) {}
+    }
+    if (fs.existsSync(qrRootPath)) {
+      try { fs.unlinkSync(qrRootPath); } catch(e) {}
+    }
+
+    console.log('[WHATSAPP] Reinitializing fresh client to generate new link QR code...');
+    wwebClient = createWhatsAppClient();
+    initWhatsApp();
+
+    res.json({ success: true, message: 'WhatsApp successfully disconnected and session purged. Reinitializing QR code...' });
+  } catch (error) {
+    console.error('[WHATSAPP] Disconnect error:', error);
+    res.status(500).json({ error: error.message || 'Failed to disconnect WhatsApp client.' });
+  }
+});
+
+app.post('/api/whatsapp/connect', async (req, res) => {
+  try {
+    if (isWwebReady) {
+      return res.json({ success: true, message: 'WhatsApp is already connected.' });
+    }
+    console.log('[WHATSAPP] Reconnection request triggered from EMR portal...');
+    
+    if (!wwebClient) {
+      wwebClient = createWhatsAppClient();
+    }
+    
+    initWhatsApp();
+    
+    res.json({ success: true, message: 'WhatsApp initialization process started.' });
+  } catch (error) {
+    console.error('[WHATSAPP] Reconnect error:', error);
+    res.status(500).json({ error: error.message || 'Failed to trigger connection.' });
   }
 });
 
