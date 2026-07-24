@@ -43,6 +43,8 @@ if (sqlite3) {
   });
 }
 
+let dbReadyPromise = Promise.resolve();
+
 if (supabaseUrl && supabaseKey) {
   const options = {};
   if (ws) {
@@ -50,7 +52,57 @@ if (supabaseUrl && supabaseKey) {
   }
   supabase = createClient(supabaseUrl, supabaseKey, options);
   dbType = 'supabase';
-  console.log('Connected to Supabase database.');
+  console.log('Supabase credentials configured. Testing connection...');
+
+  // Async connection verification test
+  dbReadyPromise = supabase.from('users').select('username').limit(1)
+    .then(({ data, error }) => {
+      if (error) {
+        console.error('\n❌ [SUPABASE CONNECTION ERROR]:', error.message);
+        if (error.code === 'PGRST116' || error.message.includes('relation "users" does not exist')) {
+          console.warn('👉 WARNING: The "users" table has not been created in your Supabase database yet!');
+          console.warn('👉 Please run the SQL schema in database_setup.md via your Supabase SQL Editor.');
+        } else {
+          console.warn('👉 WARNING: Your Supabase URL or API Key might be incorrect/invalid.');
+        }
+        console.warn('⚠️ Falling back to local SQLite database (clinic.db) for this session.\n');
+        dbType = 'sqlite';
+        if (typeof dbHelpers !== 'undefined') {
+          dbHelpers.dbType = 'sqlite';
+        }
+      } else {
+        console.log('✅ Supabase connection verified successfully! Using Cloud Supabase database.');
+        // Seed default users if Supabase users table is empty
+        return supabase.from('users').select('username', { count: 'exact', head: true })
+          .then(({ count, error: countErr }) => {
+            if (!countErr && count === 0) {
+              console.log('[SUPABASE] Users table is empty. Seeding default clinic users...');
+              const defaultUsers = [
+                { username: 'admin', password: hashPassword('admin123'), role: 'admin', allowed_tabs: JSON.stringify(["dashboard", "onboarding", "appointments", "consultations", "billing", "inventory", "drug-templates", "communications", "users", "clinic-profile"]) },
+                { username: 'doctor', password: hashPassword('doctor123'), role: 'doctor', allowed_tabs: JSON.stringify(["dashboard", "onboarding", "consultations", "drug-templates", "communications"]) },
+                { username: 'receptionist', password: hashPassword('receptionist123'), role: 'receptionist', allowed_tabs: JSON.stringify(["dashboard", "onboarding", "appointments", "communications"]) },
+                { username: 'cashier', password: hashPassword('cashier123'), role: 'cashier', allowed_tabs: JSON.stringify(["dashboard", "billing", "inventory", "communications"]) }
+              ];
+              return supabase.from('users').insert(defaultUsers)
+                .then(({ error: insertErr }) => {
+                  if (insertErr) {
+                    console.error('[SUPABASE SEED ERROR] Failed to seed default users:', insertErr.message);
+                  } else {
+                    console.log('✅ [SUPABASE] Seeded default users successfully!');
+                  }
+                });
+            }
+          });
+      }
+    })
+    .catch(err => {
+      console.error('\n❌ [SUPABASE CONNECTION EXCEPTION]:', err.message);
+      console.warn('⚠️ Falling back to local SQLite database (clinic.db) for this session.\n');
+      dbType = 'sqlite';
+      if (typeof dbHelpers !== 'undefined') {
+        dbHelpers.dbType = 'sqlite';
+      }
+    });
 } else {
   if (!sqlite3) {
     console.error('CRITICAL ERROR: No Supabase credentials found, and sqlite3 module is unavailable.');
@@ -311,6 +363,7 @@ function initSQLiteSchema() {
 const dbHelpers = {
   dbType,
   hashPassword,
+  dbReady: () => dbReadyPromise,
 
   // Users Auth
   getUser: (username) => {

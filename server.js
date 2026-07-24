@@ -414,8 +414,15 @@ async function sendWhatsAppWithPDF(toPhone, bodyContent, pdfBase64, filename) {
 
 
 // Health Check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', database: db.dbType });
+app.get('/api/health', async (req, res) => {
+  try {
+    if (db.dbReady) {
+      await db.dbReady();
+    }
+    res.json({ status: 'ok', database: db.dbType });
+  } catch (err) {
+    res.json({ status: 'ok', database: db.dbType, error: err.message });
+  }
 });
 
 // ==========================================
