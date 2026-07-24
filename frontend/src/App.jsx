@@ -23,14 +23,6 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [dbStatus, setDbStatus] = useState({ status: 'loading', database: '' });
-
-  useEffect(() => {
-    fetch(`${API_URL}/api/health`)
-      .then(r => r.json())
-      .then(data => setDbStatus({ status: 'success', database: data.database }))
-      .catch(() => setDbStatus({ status: 'error', database: '' }));
-  }, []);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [selectedPatient, setSelectedPatient] = useState(null);
@@ -301,27 +293,7 @@ export default function App() {
               <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 500, marginTop: '0.15rem' }}>Integrated Clinical Operations & Healthcare Portal</p>
             </div>
 
-            {/* Database Connection Status Badges */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', marginBottom: '1.25rem', fontSize: '0.8rem' }}>
-              {dbStatus.status === 'loading' ? (
-                <span className="badge" style={{ background: '#f1f5f9', color: '#64748b', fontWeight: 600 }}>
-                  🔍 Checking database status...
-                </span>
-              ) : dbStatus.database === 'supabase' ? (
-                <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontWeight: 700, padding: '0.4rem 0.8rem' }}>
-                  ☁️ Connected to Cloud Supabase
-                </span>
-              ) : (
-                <div style={{ textAlign: 'center' }}>
-                  <span className="badge" style={{ background: 'var(--warning-light)', color: 'var(--warning)', fontWeight: 700, padding: '0.4rem 0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                    📁 Running on Local SQLite Fallback
-                  </span>
-                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.4rem 0 0 0', maxWidth: '280px', lineHeight: '1.4' }}>
-                    Cloud connection unavailable. Using offline mirror database. Please check your network or verify Supabase schema settings.
-                  </p>
-                </div>
-              )}
-            </div>
+
 
             {loginError && (
               <div className="badge badge-danger" style={{ width: '100%', padding: '0.75rem', marginBottom: '1.25rem', borderRadius: '4px', textAlign: 'center' }}>
@@ -547,11 +519,6 @@ export default function App() {
 
         {/* User profile & Logout */}
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          
-          {/* DB Indicator */}
-          <div style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.35rem', color: dbStatus.database === 'supabase' ? 'var(--success)' : 'var(--warning)', fontWeight: 600, padding: '0 0.5rem' }}>
-            <span>{dbStatus.database === 'supabase' ? '☁️ Cloud DB (Supabase)' : '📁 Local DB (SQLite)'}</span>
-          </div>
 
           <button 
             onClick={handleLogout} 
